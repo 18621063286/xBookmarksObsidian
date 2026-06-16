@@ -142,22 +142,43 @@ export class SyncEngine {
     const bookmarkedAt = new Date().toISOString();
     let created = 0;
     let modified = 0;
+    let failed = 0;
+    // Guards against double-create when a file made earlier in THIS run isn't
+    // yet visible via getAbstractFileByPath (metadataCache/vault lag).
+    const writtenThisRun = new Set<string>();
 
     for (const b of plan.toCreate) {
-      if (settings.downloadMedia) {
-        await localizeBookmarkMedia(b, `${settings.noteFolder}/_attachments`, this.mediaIO());
-      }
-      const { filename, content } = renderNote(b, { bookmarkedAt, template: settings.template });
-      const path = normalizePath(`${settings.noteFolder}/${filename}`);
-      const file = app.vault.getAbstractFileByPath(path);
-      const action = decideWrite(!!file, !!opts.force);
+      // One bad bookmark (media hiccup, vault race) must never abort the whole
+      // sync — isolate each note and keep going.
+      try {
+        if (settings.downloadMedia) {
+          try {
+            await localizeBookmarkMedia(b, `${settings.noteFolder}/_attachments`, this.mediaIO());
+          } catch (e) {
+            console.warn(`[x-bookmarks] media localization failed for ${b.tweetId}:`, e);
+          }
+        }
+        const { filename, content } = renderNote(b, { bookmarkedAt, template: settings.template });
+        const path = normalizePath(`${settings.noteFolder}/${filename}`);
+        const file = app.vault.getAbstractFileByPath(path);
+        const action = decideWrite(!!file || writtenThisRun.has(path), !!opts.force);
 
-      if (action === "create" && !file) {
-        await app.vault.create(path, content);
-        created++;
-      } else if (action === "modify" && file instanceof TFile) {
-        await app.vault.modify(file, content);
-        modified++;
+        if (action === "create" && !file) {
+          try {
+            await app.vault.create(path, content);
+            created++;
+            writtenThisRun.add(path);
+          } catch (e) {
+            // A concurrent/duplicate create is benign — treat as already-present.
+            if (!/already exists/i.test(String(e instanceof Error ? e.message : e))) throw e;
+          }
+        } else if (action === "modify" && file instanceof TFile) {
+          await app.vault.modify(file, content);
+          modified++;
+        }
+      } catch (e) {
+        failed++;
+        console.warn(`[x-bookmarks] failed to write bookmark ${b.tweetId}:`, e);
       }
     }
 
@@ -171,6 +192,7 @@ export class SyncEngine {
     const parts = [`${created} new`];
     if (opts.force) parts.push(`${modified} re-rendered`);
     parts.push(`${plan.skipped.length} skipped`);
+    if (failed) parts.push(`${failed} failed`);
     notify(`X bookmarks synced — ${parts.join(", ")} (stopped: ${result.stopReason}).`);
   }
 
