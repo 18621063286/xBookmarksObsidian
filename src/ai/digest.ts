@@ -70,8 +70,8 @@ export function topAuthors(records: DigestRecord[], n: number): { handle: string
   return [...by.values()].sort((a, b) => b.count - a.count).slice(0, n);
 }
 
-const MAX_PROMPT_ITEMS = 120;
-const ITEM_TEXT_LEN = 240;
+const MAX_PROMPT_ITEMS = 80;
+const ITEM_TEXT_LEN = 200;
 
 /** Build the Chinese summarization prompt for one month's bookmarks. */
 export function buildMonthPrompt(month: string, records: DigestRecord[]): string {

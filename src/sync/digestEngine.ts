@@ -101,13 +101,15 @@ export class DigestEngine {
     if (order.length === 0) return;
 
     const report = this.progress ?? this.notify;
-    const sections: { month: string; content: string }[] = [];
-    let i = 0;
-    for (const month of order) {
-      i++;
-      const count = store[month].length;
-      report(`AI 分析中…  ${i}/${order.length} 个月份  ·  ${month}（${count} 条）`);
+    let firstWrite = fromScratch; // only the very first write starts from a clean file
+    let done = 0;
+
+    for (let i = 0; i < order.length; i++) {
+      const month = order[i];
       const records = store[month];
+      report(`AI 分析中…  ${i + 1}/${order.length} 个月份  ·  ${month}（${records.length} 条）`);
+
+      let section: { month: string; content: string };
       try {
         const body = await ollamaGenerate(
           obsidianOllamaRequest,
@@ -115,24 +117,29 @@ export class DigestEngine {
           this.settings.ollamaModel,
           buildMonthPrompt(month, records)
         );
-        sections.push({ month, content: renderMonthSection(month, records, body) });
+        section = { month, content: renderMonthSection(month, records, body) };
       } catch (e) {
         console.warn(`[x-bookmarks] AI digest failed for ${month}:`, e);
         this.notify(`AI 分析失败（${month}）：${e instanceof Error ? e.message : String(e)}`);
-        if (sections.length === 0) return; // nothing usable yet — bail
-        break; // keep what we have so far
+        if (done === 0) return; // nothing written yet — surface the failure
+        break; // keep everything written so far
       }
+
+      // Write after EVERY month so the file appears immediately and partial
+      // progress is never lost on a long run.
+      const base = firstWrite ? "" : await this.readDigest();
+      firstWrite = false;
+      const merged = mergeDigest(base, [section], {
+        title: DIGEST_TITLE,
+        model: this.settings.ollamaModel,
+        updatedAt: new Date().toISOString(),
+      });
+      await this.writeDigest(merged);
+      done++;
+      if (done === 1) this.notify(`摘要文件已创建：${this.digestPath()}（继续分析中…）`);
     }
 
-    report("正在写入摘要文件…");
-    const existing = fromScratch ? "" : await this.readDigest();
-    const merged = mergeDigest(existing, sections, {
-      title: DIGEST_TITLE,
-      model: this.settings.ollamaModel,
-      updatedAt: new Date().toISOString(),
-    });
-    await this.writeDigest(merged);
-    this.notify(`AI 摘要已更新（${sections.length} 个月份）→ ${this.digestPath()}`);
+    this.notify(`AI 摘要完成（${done}/${order.length} 个月份）→ ${this.digestPath()}`);
   }
 
   // --- file/store io ---
