@@ -1,9 +1,10 @@
 {
-  "id": "obsidian-x-bookmarks",
+  "id": "x-bookmarks",
   "name": "X Bookmarks",
   "version": "0.1.0",
   "minAppVersion": "1.4.0",
-  "description": "Sync your Twitter/X bookmarks into your vault as Markdown notes. Unofficial, cookie-based, personal use.",
+  "description": "Sync your Twitter/X bookmarks into your vault as Markdown notes, with optional local-AI monthly summaries. Unofficial, cookie-based, personal use.",
   "author": "Ken",
+  "authorUrl": "https://github.com/YOUR_GITHUB_USERNAME",
   "isDesktopOnly": false
 }

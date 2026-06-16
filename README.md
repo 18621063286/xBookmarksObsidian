@@ -37,22 +37,38 @@ template into `Twitter/`.
   progress so a sync is interruptible.
 - **Manual + scheduled sync**, custom template, custom folder, optional **local
   media download** so notes survive the original tweet being deleted.
+- **Ribbon button** (left toolbar): click to sync; right-click for quick actions.
+- **Optional AI monthly digest** via your **local Ollama** — summarizes new
+  bookmarks by month into a single note (topics, viewpoints, top authors), newest
+  on top. Nothing leaves your machine.
 
-## Install (manual / BRAT)
+## Install
 
-Not in the community store. Install one of two ways:
+> Network + privacy note: this plugin sends requests to **x.com** with your own
+> session cookie (stored only in this plugin's local `data.json`) and, if you
+> enable the digest, to your **local Ollama**. It is unofficial and for personal
+> use — see the disclaimer at the top.
 
-1. **BRAT** — add this repo URL in the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin.
-2. **Manual** — copy `main.js`, `manifest.json`, and `styles.css` into
-   `<vault>/.obsidian/plugins/obsidian-x-bookmarks/`, then enable it in
-   *Settings → Community plugins*.
+### Via BRAT (recommended)
 
-To build from source:
+1. Install the [**BRAT**](https://github.com/TfTHacker/obsidian42-brat) community plugin.
+2. *BRAT → Add beta plugin* → paste this repo's URL.
+3. Enable **X Bookmarks** in *Settings → Community plugins*.
+
+### Manual
+
+Copy `main.js`, `manifest.json`, and `styles.css` into
+`<vault>/.obsidian/plugins/x-bookmarks/`, then enable it in
+*Settings → Community plugins*.
+
+### Build from source
 
 ```bash
 npm install
 npm run build   # produces main.js
 ```
+
+Maintainers: see [PUBLISHING.md](PUBLISHING.md) for releasing and store submission.
 
 ## Usage
 

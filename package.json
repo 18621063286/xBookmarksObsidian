@@ -1,5 +1,5 @@
 {
-  "name": "obsidian-x-bookmarks",
+  "name": "x-bookmarks",
   "version": "0.1.0",
   "description": "Sync your Twitter/X bookmarks into your Obsidian vault as Markdown notes (unofficial, personal use).",
   "main": "main.js",
