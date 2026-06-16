@@ -39,8 +39,15 @@ export class DigestEngine {
     private app: App,
     private settings: XBookmarksSettings,
     private notify: (msg: string) => void,
-    private manifestDir: string
+    private manifestDir: string,
+    /** Optional live progress sink (updated in place during long runs). */
+    private progress?: (msg: string) => void
   ) {}
+
+  /** Vault-relative path of the digest note (for opening / messaging). */
+  get notePath(): string {
+    return this.digestPath();
+  }
 
   /** Add this sync's new bookmarks and regenerate only the affected months. */
   async processNewBookmarks(newBookmarks: Bookmark[]): Promise<void> {
@@ -93,11 +100,13 @@ export class DigestEngine {
     const order = months.filter((m) => (store[m]?.length ?? 0) > 0).sort((a, b) => b.localeCompare(a));
     if (order.length === 0) return;
 
+    const report = this.progress ?? this.notify;
     const sections: { month: string; content: string }[] = [];
     let i = 0;
     for (const month of order) {
       i++;
-      this.notify(`AI 分析中…（${i}/${order.length}）${month}`);
+      const count = store[month].length;
+      report(`AI 分析中…  ${i}/${order.length} 个月份  ·  ${month}（${count} 条）`);
       const records = store[month];
       try {
         const body = await ollamaGenerate(
@@ -115,6 +124,7 @@ export class DigestEngine {
       }
     }
 
+    report("正在写入摘要文件…");
     const existing = fromScratch ? "" : await this.readDigest();
     const merged = mergeDigest(existing, sections, {
       title: DIGEST_TITLE,
@@ -122,7 +132,7 @@ export class DigestEngine {
       updatedAt: new Date().toISOString(),
     });
     await this.writeDigest(merged);
-    this.notify(`AI 摘要已更新（${sections.length} 个月份）。`);
+    this.notify(`AI 摘要已更新（${sections.length} 个月份）→ ${this.digestPath()}`);
   }
 
   // --- file/store io ---

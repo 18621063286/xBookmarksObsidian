@@ -1,4 +1,4 @@
-import { Plugin, Notice, Platform, addIcon, Menu } from "obsidian";
+import { Plugin, Notice, Platform, addIcon, Menu, TFile } from "obsidian";
 import {
   XBookmarksSettings,
   mergeSettings,
@@ -144,10 +144,13 @@ export default class XBookmarksPlugin extends Plugin {
       });
       const newBookmarks = await engine.run(opts);
       if (this.settings.aiEnabled && newBookmarks.length) {
+        const progress = new Notice("AI 摘要中…", 0);
         try {
-          await this.digestEngine().processNewBookmarks(newBookmarks);
+          await this.digestEngine((m) => progress.setMessage(m)).processNewBookmarks(newBookmarks);
         } catch (e) {
           new Notice(`AI digest failed: ${e instanceof Error ? e.message : String(e)}`);
+        } finally {
+          progress.hide();
         }
       }
     } catch (e) {
@@ -157,13 +160,19 @@ export default class XBookmarksPlugin extends Plugin {
     }
   }
 
-  private digestEngine(): DigestEngine {
+  private digestEngine(progress?: (msg: string) => void): DigestEngine {
     return new DigestEngine(
       this.app,
       this.settings,
       (msg) => new Notice(msg),
-      this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`
+      this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`,
+      progress
     );
+  }
+
+  private async openDigest(path: string): Promise<void> {
+    const f = this.app.vault.getAbstractFileByPath(path);
+    if (f instanceof TFile) await this.app.workspace.getLeaf(true).openFile(f);
   }
 
   /** Summarize only bookmarks that haven't been added to the digest yet. */
@@ -181,23 +190,26 @@ export default class XBookmarksPlugin extends Plugin {
       return;
     }
     this.syncing = true;
+    const progress = new Notice("准备 AI 摘要…", 0);
     try {
-      new Notice("Fetching bookmarks to find un-digested ones…");
       const engine = new SyncEngine({
         app: this.app,
         settings: this.settings,
         saveSettings: () => this.saveSettings(),
-        notify: (msg) => new Notice(msg),
+        notify: (msg) => progress.setMessage(msg),
       });
-      const all = await engine.fetchAllParsed();
+      const all = await engine.fetchAllParsed((n) => progress.setMessage(`正在拉取书签…已获取 ${n} 条`));
       if (!all.length) {
         new Notice("No bookmarks fetched.");
         return;
       }
-      await this.digestEngine().digestMissing(all);
+      const de = this.digestEngine((m) => progress.setMessage(m));
+      const n = await de.digestMissing(all);
+      if (n > 0) await this.openDigest(de.notePath);
     } catch (e) {
       new Notice(`Digest failed: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
+      progress.hide();
       this.syncing = false;
     }
   }
@@ -217,24 +229,27 @@ export default class XBookmarksPlugin extends Plugin {
       return;
     }
     this.syncing = true;
+    const progress = new Notice("准备重建 AI 摘要…", 0);
     try {
-      new Notice("Fetching all bookmarks for the AI digest…");
       const engine = new SyncEngine({
         app: this.app,
         settings: this.settings,
         saveSettings: () => this.saveSettings(),
-        notify: (msg) => new Notice(msg),
+        notify: (msg) => progress.setMessage(msg),
       });
-      const all = await engine.fetchAllParsed();
+      const all = await engine.fetchAllParsed((n) => progress.setMessage(`正在拉取全部书签…已获取 ${n} 条`));
       if (!all.length) {
         new Notice("No bookmarks fetched.");
         return;
       }
-      new Notice(`Analyzing ${all.length} bookmarks with Ollama — this can take a while…`);
-      await this.digestEngine().rebuildAll(all);
+      progress.setMessage(`共 ${all.length} 条，开始用 Ollama 分析（按月，请耐心等待）…`);
+      const de = this.digestEngine((m) => progress.setMessage(m));
+      await de.rebuildAll(all);
+      await this.openDigest(de.notePath);
     } catch (e) {
       new Notice(`Rebuild digest failed: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
+      progress.hide();
       this.syncing = false;
     }
   }

@@ -96,7 +96,7 @@ export class SyncEngine {
   }
 
   /** Fetch + parse the full bookmark set without writing notes (for digest rebuild). */
-  async fetchAllParsed(): Promise<Bookmark[]> {
+  async fetchAllParsed(onPage?: (collected: number) => void): Promise<Bookmark[]> {
     const { settings, notify } = this.deps;
     const creds: Credentials = { authToken: settings.authToken, ct0: settings.ct0 };
     if (!validateCredentials(creds).valid) {
@@ -111,6 +111,7 @@ export class SyncEngine {
       maxPages: settings.maxPages,
       startCursor: null,
       seenIds: new Set(), // want everything
+      onProgress: (p) => onPage?.(p.collected),
     });
     return parseBookmarks(result.results);
   }
