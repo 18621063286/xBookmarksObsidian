@@ -32,6 +32,25 @@ function clamp(s: string, n: number): string {
   return oneLine.length > n ? oneLine.slice(0, n) + "…" : oneLine;
 }
 
+/**
+ * Make tweet text safe to embed INLINE in the digest without breaking the
+ * surrounding document. Tweets routinely contain raw markdown/HTML:
+ *  - ``` code fences would turn the rest of the file into a code block
+ *  - < > can close our <details> block / start raw HTML
+ *  - [ ] can form accidental links next to the real [原文](url) link
+ * We swap these for inert look-alikes (readable, non-structural).
+ */
+export function sanitizeInline(s: string, n: number): string {
+  let t = (s || "").replace(/\s+/g, " ").trim();
+  t = t
+    .replace(/`/g, "ˋ") // backtick -> modifier grave (kills code fences/spans)
+    .replace(/</g, "‹")
+    .replace(/>/g, "›")
+    .replace(/\[/g, "［")
+    .replace(/\]/g, "］");
+  return t.length > n ? t.slice(0, n) + "…" : t;
+}
+
 export function bookmarkToRecord(b: Bookmark): DigestRecord {
   let text = b.text;
   if (b.quoted?.text) text += ` ｜引用 @${b.quoted.author.handle}：${b.quoted.text}`;
@@ -92,19 +111,29 @@ export function buildMonthPrompt(month: string, records: DigestRecord[]): string
   ].join("\n");
 }
 
+/** Strip a code fence the model may have wrapped the whole answer in. */
+export function stripCodeFence(s: string): string {
+  const t = (s || "").trim();
+  const m = t.match(/^```[a-zA-Z]*\s*\n([\s\S]*?)\n?```$/);
+  return (m ? m[1] : t).trim();
+}
+
 /** Render one month's full section (heading + stats + AI body + collapsible list). */
 export function renderMonthSection(month: string, records: DigestRecord[], aiBody: string): string {
   const authors = topAuthors(records, 6)
     .map((a) => `@${a.handle}（${a.count}）`)
     .join("、");
   const list = records
-    .map((r) => `- **${r.name} (@${r.handle})**：${clamp(r.text, 140)} — [原文](${r.url})`)
+    .map(
+      (r) =>
+        `- **${sanitizeInline(r.name, 80)} (@${r.handle})**：${sanitizeInline(r.text, 140)} — [原文](${r.url})`
+    )
     .join("\n");
 
   return [
     `## ${month} · ${records.length} 条`,
     ``,
-    aiBody.trim(),
+    stripCodeFence(aiBody),
     ``,
     `**主要作者**：${authors || "—"}`,
     ``,

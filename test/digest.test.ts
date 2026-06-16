@@ -113,6 +113,24 @@ describe("renderMonthSection", () => {
     expect(section).toContain("<details>");
     expect(section).toContain("[原文](https://x.com/alice/status/1)");
   });
+
+  it("neutralizes markdown/HTML in embedded tweet text (no code fences, angle brackets, or fake links)", () => {
+    const evil = rec({ text: "prompt: ``` code ``` and </details> and [fake](x)" });
+    const section = renderMonthSection("2024-06", [evil], "body");
+    expect(section).not.toContain("```");
+    expect(section).not.toContain("</details> and"); // the tweet's </details> must be defused
+    // the real footer link is still intact
+    expect(section).toContain("[原文](https://x.com/alice/status/1)");
+    // exactly one real <details>/</details> pair
+    expect((section.match(/<details>/g) || []).length).toBe(1);
+    expect((section.match(/<\/details>/g) || []).length).toBe(1);
+  });
+
+  it("strips a code fence the model wrapped the whole answer in", () => {
+    const section = renderMonthSection("2024-06", [rec()], "```markdown\n**主要话题**：X\n```");
+    expect(section).toContain("**主要话题**：X");
+    expect(section).not.toContain("```");
+  });
 });
 
 describe("parseDigestSections + mergeDigest", () => {
