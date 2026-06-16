@@ -47,8 +47,23 @@ export function sanitizeInline(s: string, n: number): string {
     .replace(/</g, "‹")
     .replace(/>/g, "›")
     .replace(/\[/g, "［")
-    .replace(/\]/g, "］");
+    .replace(/\]/g, "］")
+    .replace(/\$/g, "＄") // dollar -> fullwidth (kills $...$ LaTeX math pairing)
+    .replace(/\|/g, "｜") // pipe -> fullwidth (avoids table parsing)
+    .replace(/%%/g, "٪٪"); // Obsidian comment marker
   return t.length > n ? t.slice(0, n) + "…" : t;
+}
+
+/**
+ * Lighter pass for the model-generated body: preserve its markdown formatting
+ * (bold, bullets, headings) but defuse code fences, LaTeX math, and raw HTML
+ * tags that would break the surrounding document.
+ */
+export function sanitizeBody(s: string): string {
+  return stripCodeFence(s)
+    .replace(/`/g, "ˋ")
+    .replace(/\$/g, "＄")
+    .replace(/</g, "‹");
 }
 
 export function bookmarkToRecord(b: Bookmark): DigestRecord {
@@ -133,7 +148,7 @@ export function renderMonthSection(month: string, records: DigestRecord[], aiBod
   return [
     `## ${month} · ${records.length} 条`,
     ``,
-    stripCodeFence(aiBody),
+    sanitizeBody(aiBody),
     ``,
     `**主要作者**：${authors || "—"}`,
     ``,

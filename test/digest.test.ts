@@ -126,6 +126,16 @@ describe("renderMonthSection", () => {
     expect((section.match(/<\/details>/g) || []).length).toBe(1);
   });
 
+  it("defuses $ (LaTeX math) and | (tables) in tweet text and the AI body", () => {
+    const section = renderMonthSection(
+      "2024-06",
+      [rec({ text: "raised $200 million at $1.6 billion", name: "a | b" })],
+      "**核心观点**：营收达 $561 / 月"
+    );
+    expect(section).not.toContain("$"); // no raw dollar signs left to start math
+    expect(section).not.toContain("| b"); // pipe in name defused
+  });
+
   it("strips a code fence the model wrapped the whole answer in", () => {
     const section = renderMonthSection("2024-06", [rec()], "```markdown\n**主要话题**：X\n```");
     expect(section).toContain("**主要话题**：X");
@@ -160,6 +170,24 @@ describe("parseDigestSections + mergeDigest", () => {
     // header regenerated
     expect(merged).toContain("# X Digest");
     expect(merged).toContain("llama3");
+  });
+
+  it("revising the same month replaces its section — never two summaries for one month", () => {
+    // First pass: June has 1 record.
+    let file = mergeDigest("", [{ month: "2024-06", content: "## 2024-06 · 1 条\nv1" }], {
+      title: "T",
+      model: "m",
+      updatedAt: "t1",
+    });
+    // Later: a new bookmark lands in June -> regenerate June with the full set.
+    file = mergeDigest(file, [{ month: "2024-06", content: "## 2024-06 · 2 条\nv2" }], {
+      title: "T",
+      model: "m",
+      updatedAt: "t2",
+    });
+    expect((file.match(/^## 2024-06 /gm) || []).length).toBe(1); // exactly one June heading
+    expect(file).toContain("v2");
+    expect(file).not.toContain("v1");
   });
 
   it("sorts 'unknown' last", () => {
