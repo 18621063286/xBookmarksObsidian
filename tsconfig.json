@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "module": "ESNext",
+    "target": "ES2020",
+    "moduleResolution": "node",
+    "allowJs": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "importHelpers": false,
+    "isolatedModules": true,
+    "lib": ["ES2020", "DOM"],
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["node_modules"]
+}

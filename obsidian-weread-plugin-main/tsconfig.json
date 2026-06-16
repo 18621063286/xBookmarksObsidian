@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "baseUrl": "./src",
+    "paths": {
+      "*": ["*"]
+    },
+    "inlineSourceMap": true,
+    "inlineSources": true,
+    "module": "ESNext",
+    "target": "ES6",
+    "allowJs": true,
+    "noImplicitAny": true,
+    "moduleResolution": "node",
+    "importHelpers": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "lib": [
+      "ES2021",
+      "DOM",
+      "ES5",
+      "ES6",
+      "ES7"
+    ]
+  },
+  "include": ["**/*.ts" ]
+}

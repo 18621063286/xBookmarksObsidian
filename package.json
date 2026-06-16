@@ -1,0 +1,36 @@
+{
+  "name": "obsidian-x-bookmarks",
+  "version": "0.1.0",
+  "description": "Sync your Twitter/X bookmarks into your Obsidian vault as Markdown notes (unofficial, personal use).",
+  "main": "main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -noEmit -skipLibCheck"
+  },
+  "keywords": [
+    "obsidian",
+    "twitter",
+    "x",
+    "bookmarks"
+  ],
+  "author": "Ken",
+  "license": "MIT",
+  "dependencies": {
+    "nunjucks": "^3.2.4",
+    "set-cookie-parser": "^2.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/nunjucks": "^3.2.6",
+    "@types/set-cookie-parser": "^2.4.7",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "^0.20.0",
+    "obsidian": "^1.5.7",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  }
+}

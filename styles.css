@@ -1,0 +1,21 @@
+/* obsidian-x-bookmarks styles */
+
+.x-bookmarks-setting-cookie textarea {
+  width: 100%;
+  min-height: 5em;
+  font-family: var(--font-monospace);
+  font-size: var(--font-smaller);
+}
+
+.x-bookmarks-status {
+  color: var(--text-muted);
+  font-size: var(--font-smaller);
+}
+
+.x-bookmarks-status.is-valid {
+  color: var(--text-success);
+}
+
+.x-bookmarks-status.is-invalid {
+  color: var(--text-error);
+}
