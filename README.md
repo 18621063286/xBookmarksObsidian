@@ -58,7 +58,7 @@ template into `Twitter/`.
 ### Manual
 
 Copy `main.js`, `manifest.json`, and `styles.css` into
-`<vault>/.obsidian/plugins/x-bookmarks/`, then enable it in
+`<vault>/.obsidian/plugins/x-bookmarks-to-vault/`, then enable it in
 *Settings → Community plugins*.
 
 ### Build from source
