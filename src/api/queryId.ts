@@ -30,7 +30,7 @@ export interface ResolvedQueryId {
  * Last-resort static value. X rotates this constant out of validity on its own
  * schedule — that's expected; discovery + override exist precisely to recover.
  */
-export const STATIC_FALLBACK_QUERY_ID = "xLjCVTqYWz8Cn5robKvqVQ";
+export const STATIC_FALLBACK_QUERY_ID = "ojgFx9G-r0OkXCFVN9k5oA";
 
 export const DEFAULT_QUERYID_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
