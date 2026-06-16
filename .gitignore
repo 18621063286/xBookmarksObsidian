@@ -5,3 +5,6 @@ main.js
 data.json
 coverage/
 .vitest/
+
+# Vendored reference plugin (not part of this repo)
+obsidian-weread-plugin-main/
