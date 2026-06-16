@@ -2,7 +2,7 @@ import { App, TFile, TFolder, normalizePath, requestUrl } from "obsidian";
 import type { XBookmarksSettings } from "../settings";
 import { validateCredentials, type Credentials } from "../auth/cookies";
 import { resolveQueryId, forceRefreshQueryId, type ResolveDeps } from "../api/queryId";
-import { makeFetchPage } from "../api/client";
+import { makeFetchPage, USER_AGENT } from "../api/client";
 import {
   fetchAllBookmarks,
   AuthError,
@@ -218,10 +218,7 @@ export class SyncEngine {
     const res = await requestUrl({
       url,
       method: "GET",
-      headers: {
-        "user-agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-      },
+      headers: { "user-agent": USER_AGENT },
     } as any);
     return res.text ?? "";
   }
