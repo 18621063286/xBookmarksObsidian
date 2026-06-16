@@ -18,7 +18,7 @@ export class Plugin {
   addCommand(_cmd: any): any {}
   addSettingTab(_tab: any): void {}
   addRibbonIcon(_icon: string, _title: string, _cb: any): any {
-    return { addClass() {} };
+    return { addClass() {}, addEventListener() {} };
   }
   registerInterval(id: number): number {
     return id;
@@ -26,6 +26,15 @@ export class Plugin {
 }
 
 export function addIcon(_id: string, _svg: string): void {}
+
+export class Menu {
+  addItem(cb?: any) {
+    const item: any = { setTitle: () => item, setIcon: () => item, onClick: () => item };
+    cb?.(item);
+    return this;
+  }
+  showAtMouseEvent(_e: any) {}
+}
 
 export class PluginSettingTab {
   app: any;

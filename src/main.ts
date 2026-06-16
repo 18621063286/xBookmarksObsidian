@@ -1,4 +1,4 @@
-import { Plugin, Notice, Platform, addIcon } from "obsidian";
+import { Plugin, Notice, Platform, addIcon, Menu } from "obsidian";
 import {
   XBookmarksSettings,
   mergeSettings,
@@ -21,7 +21,33 @@ export default class XBookmarksPlugin extends Plugin {
       "x-bookmarks-logo",
       `<path fill="currentColor" transform="scale(4.1667)" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>`
     );
-    this.addRibbonIcon("x-bookmarks-logo", "Sync X bookmarks", () => this.runSync());
+    const ribbonEl = this.addRibbonIcon("x-bookmarks-logo", "Sync X bookmarks", () => this.runSync());
+    // Right-click the ribbon icon -> quick actions menu (incl. Ollama digest).
+    ribbonEl.addEventListener("contextmenu", (evt) => {
+      evt.preventDefault();
+      const menu = new Menu();
+      menu.addItem((item) =>
+        item
+          .setTitle("Sync X bookmarks")
+          .setIcon("x-bookmarks-logo")
+          .onClick(() => this.runSync())
+      );
+      if (this.settings.aiEnabled) {
+        menu.addItem((item) =>
+          item
+            .setTitle("AI 摘要未处理的书签")
+            .setIcon("sparkles")
+            .onClick(() => this.digestUndigested())
+        );
+        menu.addItem((item) =>
+          item
+            .setTitle("重建全部 AI 摘要")
+            .setIcon("refresh-cw")
+            .onClick(() => this.rebuildDigest())
+        );
+      }
+      menu.showAtMouseEvent(evt);
+    });
 
     this.addSettingTab(new XBookmarksSettingTab(this.app, this));
 
@@ -41,6 +67,12 @@ export default class XBookmarksPlugin extends Plugin {
       id: "login-x",
       name: "Log in to X",
       callback: () => this.runLogin(),
+    });
+
+    this.addCommand({
+      id: "digest-undigested",
+      name: "AI digest: summarize un-digested bookmarks",
+      callback: () => this.digestUndigested(),
     });
 
     this.addCommand({
@@ -132,6 +164,42 @@ export default class XBookmarksPlugin extends Plugin {
       (msg) => new Notice(msg),
       this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`
     );
+  }
+
+  /** Summarize only bookmarks that haven't been added to the digest yet. */
+  async digestUndigested(): Promise<void> {
+    if (this.syncing) {
+      new Notice("A sync/digest is already running…");
+      return;
+    }
+    if (!this.settings.aiEnabled) {
+      new Notice("Enable AI digest in settings first.");
+      return;
+    }
+    if (!this.settings.ollamaModel) {
+      new Notice("Pick an Ollama model in settings first.");
+      return;
+    }
+    this.syncing = true;
+    try {
+      new Notice("Fetching bookmarks to find un-digested ones…");
+      const engine = new SyncEngine({
+        app: this.app,
+        settings: this.settings,
+        saveSettings: () => this.saveSettings(),
+        notify: (msg) => new Notice(msg),
+      });
+      const all = await engine.fetchAllParsed();
+      if (!all.length) {
+        new Notice("No bookmarks fetched.");
+        return;
+      }
+      await this.digestEngine().digestMissing(all);
+    } catch (e) {
+      new Notice(`Digest failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      this.syncing = false;
+    }
   }
 
   /** Re-fetch all bookmarks and rebuild the monthly AI digest from scratch. */

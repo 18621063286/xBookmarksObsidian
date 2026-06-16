@@ -51,6 +51,32 @@ export class DigestEngine {
     await this.regenerate(store, [...touched], false);
   }
 
+  /**
+   * Summarize only the bookmarks not yet in the digest store (the gap), then
+   * regenerate just the months they fall into. Returns how many were new.
+   */
+  async digestMissing(allBookmarks: Bookmark[]): Promise<number> {
+    if (!this.settings.ollamaModel) {
+      this.notify("请先在设置里选择一个 Ollama 模型。");
+      return 0;
+    }
+    const store = await this.loadStore();
+    const have = new Set<string>();
+    for (const month of Object.keys(store)) for (const r of store[month]) have.add(r.tweetId);
+
+    const missing = allBookmarks.filter((b) => !have.has(b.tweetId));
+    if (missing.length === 0) {
+      this.notify("没有需要摘要的新书签——全部已处理。");
+      return 0;
+    }
+
+    this.notify(`发现 ${missing.length} 条未摘要的书签，正在用 Ollama 分析…`);
+    const touched = addRecords(store, missing.map(bookmarkToRecord));
+    await this.saveStore(store);
+    await this.regenerate(store, [...touched], false);
+    return missing.length;
+  }
+
   /** Rebuild the entire digest from a full bookmark set (the rebuild command). */
   async rebuildAll(allBookmarks: Bookmark[]): Promise<void> {
     if (!this.settings.ollamaModel) {
