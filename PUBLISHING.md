@@ -1,6 +1,6 @@
 # Publishing X Bookmarks
 
-> Repo: https://github.com/luyuncan/xBookmarksObsidian
+> Repo: https://github.com/18621063286/xBookmarksObsidian
 > values. (Tell the assistant your GitHub username and it will fill these in.)
 
 ## Heads-up on the official store
@@ -15,7 +15,7 @@ reliable distribution path and needs no review.
 1. Create a **public** GitHub repo (e.g. `xBookmarksObsidian`).
 2. Push this code:
    ```bash
-   git remote add origin https://github.com/luyuncan/xBookmarksObsidian.git
+   git remote add origin https://github.com/18621063286/xBookmarksObsidian.git
    git push -u origin master
    ```
 3. Confirm `.github/workflows/release.yml` is present (it is) — it builds and
@@ -36,7 +36,7 @@ release a new version later: bump `version` in `manifest.json` (and add the
 
 Users do this:
 1. Install the **BRAT** community plugin.
-2. *BRAT → Add beta plugin* → paste `https://github.com/luyuncan/xBookmarksObsidian`.
+2. *BRAT → Add beta plugin* → paste `https://github.com/18621063286/xBookmarksObsidian`.
 3. Enable **X Bookmarks**.
 
 Put that in your README and you're done.
@@ -55,7 +55,7 @@ Put that in your README and you're done.
      "name": "X Bookmarks",
      "author": "Ken",
      "description": "Sync your X/Twitter bookmarks into your vault as Markdown, with optional local-AI monthly summaries.",
-     "repo": "luyuncan/xBookmarksObsidian"
+     "repo": "18621063286/xBookmarksObsidian"
    }
    ```
 
