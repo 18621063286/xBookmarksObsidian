@@ -111,10 +111,12 @@ export class SyncEngine {
     return fetchAllBookmarks({
       fetchPage,
       maxPages: settings.maxPages,
-      // Resume a prior interrupted/truncated backfill from its saved cursor;
-      // otherwise start from the top. seenIds still stops us early once we reach
-      // already-synced bookmarks on a normal incremental run.
-      startCursor: settings.lastSyncCursor || null,
+      // Always start from the top. Written notes are the source of truth, not the
+      // fetch cursor: we fetch all pages before writing, so a saved cursor would
+      // point at the END of the timeline and resuming from it would skip every
+      // not-yet-written bookmark in the middle. seenIds (existing notes) makes a
+      // normal incremental run stop early once it reaches already-synced tweets.
+      startCursor: null,
       seenIds: new Set(existing),
       onProgress: async (p) => {
         settings.lastSyncCursor = p.cursor ?? "";
@@ -183,11 +185,14 @@ export class SyncEngine {
     }
 
     settings.lastSyncAt = bookmarkedAt;
-    // Only clear the resume cursor when the walk actually finished. On a
-    // max-pages stop we keep it so the next run continues the deep backfill
-    // instead of restarting from the top and stopping at the first seen page.
-    if (result.stopReason !== "max-pages") settings.lastSyncCursor = "";
+    settings.lastSyncCursor = ""; // we always start from the top; cursor is diagnostic only
     await this.deps.saveSettings();
+
+    if (result.stopReason === "max-pages") {
+      notify(
+        `Reached the max-pages limit (${settings.maxPages}). If you have more than ${settings.maxPages * 100} bookmarks, raise "Max pages per sync" in settings and sync again.`
+      );
+    }
 
     const parts = [`${created} new`];
     if (opts.force) parts.push(`${modified} re-rendered`);
