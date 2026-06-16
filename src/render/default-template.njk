@@ -1,0 +1,18 @@
+# {{ author.name }} (@{{ author.handle }})
+
+{{ text }}
+{% if media | length %}
+{% for m in media %}{% if m.type == "photo" %}![]({{ m.url }})
+{% else %}🎬 [{{ m.type }}]({{ m.url }})
+{% endif %}{% endfor %}{% endif %}{% if quoted %}
+> **Quoted — {{ quoted.author.name }} (@{{ quoted.author.handle }})**
+>
+> {{ quoted.text | replace("\n", "\n> ") }}
+{% for m in quoted.media %}> ![]({{ m.url }})
+{% endfor %}> [↗ original]({{ quoted.permalink }})
+{% endif %}{% if card %}
+**[{{ card.title or card.url }}]({{ card.url }})**
+{% if card.desc %}{{ card.desc }}{% endif %}
+{% endif %}
+---
+[↗ Open on X]({{ permalink }}) · {{ created_at | xdate }}
