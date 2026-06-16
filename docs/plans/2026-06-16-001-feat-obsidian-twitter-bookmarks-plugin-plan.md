@@ -1,7 +1,7 @@
 ---
 title: "feat: Obsidian Twitter/X 书签同步插件（obsidian-x-bookmarks）"
 type: feat
-status: active
+status: completed
 created: 2026-06-16
 target_repo: 新建独立仓库 obsidian-x-bookmarks（尚未创建；下文 src/ 等路径相对该插件仓库根）
 depth: deep
