@@ -126,7 +126,23 @@ export function loginAndCaptureCookies(opts: LoginOptions = {}): Promise<Credent
       }
     });
 
-    win.loadURL(opts.loginUrl ?? DEFAULT_LOGIN_URL);
+    win.loadURL(opts.loginUrl ?? DEFAULT_LOGIN_URL).catch((err: any) => {
+      // ERR_ABORTED fires when our own navigation-capture interrupts the load —
+      // benign. Surface anything else as a clean rejection instead of an
+      // unhandled promise rejection in the console.
+      const msg = String(err?.message ?? err);
+      if (/ERR_ABORTED/.test(msg)) return;
+      if (!settled) {
+        settled = true;
+        try {
+          win.removeAllListeners("closed");
+          win.close();
+        } catch {
+          /* ignore */
+        }
+        reject(new Error(`Failed to load the X login page: ${msg}. Check your network/VPN and try again.`));
+      }
+    });
   });
 }
 

@@ -181,6 +181,9 @@ export class SyncEngine {
     opts: SyncRunOptions
   ): Promise<void> {
     const { notify } = this.deps;
+    // Always log the real error (with type + message) so the dev console shows
+    // the precise failure, not just the user-facing Notice summary.
+    console.warn(`[x-bookmarks] sync error [${(e as any)?.constructor?.name}]:`, e);
 
     if (e instanceof QueryIdRotationError) {
       // Auto-recovery: force a queryId refresh and retry once.
