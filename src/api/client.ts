@@ -1,5 +1,6 @@
-import { requestUrl } from "obsidian";
+import { requestUrl, type RequestUrlResponse } from "obsidian";
 import { buildCookieHeader, type Credentials } from "../auth/cookies";
+import { asNumber, asString, get } from "../util/json";
 
 /**
  * Low-level X GraphQL client (KTD3/KTD4): all requests go through Obsidian's
@@ -64,7 +65,7 @@ export const DEFAULT_FEATURES: Record<string, boolean> = {
 
 export interface RawResponse {
   status: number;
-  json: any;
+  json: unknown;
   text: string;
 }
 
@@ -112,32 +113,34 @@ export function buildBookmarksUrl(
  */
 export const obsidianRequest: RequestFn = async ({ url, method, headers }) => {
   try {
-    const res = await requestUrl({ url, method, headers, throw: false } as any);
+    const res = await requestUrl({ url, method, headers, throw: false });
     return { status: res.status, json: safeJson(res), text: res.text ?? "" };
-  } catch (e: any) {
+  } catch (e: unknown) {
     // Older requestUrl throws on non-2xx; recover the status AND any body so
     // 400-feature / GraphQL-error classification still works on those builds.
-    if (typeof e?.status === "number") {
-      let json: any = e?.json;
-      if (json === undefined && typeof e?.body === "string") {
+    const status = asNumber(get(e, "status"));
+    if (status !== undefined) {
+      let json: unknown = get(e, "json");
+      const body = asString(get(e, "body"));
+      if (json === undefined && body !== undefined) {
         try {
-          json = JSON.parse(e.body);
+          json = JSON.parse(body) as unknown;
         } catch {
           /* leave json undefined */
         }
       }
-      return { status: e.status, json, text: String(e?.body ?? e?.message ?? "") };
+      return { status, json, text: body ?? asString(get(e, "message")) ?? "" };
     }
     throw e;
   }
 };
 
-function safeJson(res: any): any {
+function safeJson(res: RequestUrlResponse): unknown {
   try {
-    return res.json;
+    return res.json as unknown;
   } catch {
     try {
-      return JSON.parse(res.text);
+      return JSON.parse(res.text) as unknown;
     } catch {
       return undefined;
     }

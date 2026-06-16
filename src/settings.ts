@@ -102,7 +102,6 @@ export class XBookmarksSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    new Setting(containerEl).setName("X Bookmarks").setHeading();
 
     // --- Account / login ---
     const creds = validateCredentials(this.plugin.settings);

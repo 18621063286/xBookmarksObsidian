@@ -13,13 +13,13 @@ import {
 
 /** Obsidian-backed Ollama transport over requestUrl (used by the engine + settings UI). */
 export const obsidianOllamaRequest: OllamaRequest = async ({ url, method, headers, body }) => {
-  const res = await requestUrl({ url, method, headers, body, throw: false } as any);
-  let json: any;
+  const res = await requestUrl({ url, method, headers, body, throw: false });
+  let json: unknown;
   try {
-    json = res.json;
+    json = res.json as unknown;
   } catch {
     try {
-      json = JSON.parse(res.text);
+      json = JSON.parse(res.text) as unknown;
     } catch {
       json = undefined;
     }

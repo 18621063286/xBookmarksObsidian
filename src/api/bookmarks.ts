@@ -1,5 +1,6 @@
 import type { FetchPageFn, RawResponse } from "./client";
 import { extractTimelineEntries } from "../model/timeline";
+import { asArray, asString, get } from "../util/json";
 
 /**
  * Paginated Bookmarks fetch loop with Ken's hard-rule guardrails (R7): a
@@ -48,7 +49,7 @@ export interface FetchBookmarksOptions {
 
 export interface FetchBookmarksResult {
   /** `tweet_results.result` objects across all fetched pages, in order. */
-  results: any[];
+  results: unknown[];
   lastCursor: string | null;
   stopReason: StopReason;
   pagesFetched: number;
@@ -67,11 +68,11 @@ export async function fetchAllBookmarks(opts: FetchBookmarksOptions): Promise<Fe
   } = opts;
 
   const seen = opts.seenIds ?? new Set<string>();
-  const results: any[] = [];
+  const results: unknown[] = [];
   let cursor = opts.startCursor ?? null;
   let page = 0;
 
-  const collect = (entries: { id: string; result: any }[]) => {
+  const collect = (entries: { id: string; result: unknown }[]) => {
     for (const e of entries) {
       seen.add(e.id);
       results.push(e.result);
@@ -167,17 +168,19 @@ function classifyStatus(raw: RawResponse): void {
   throw new BookmarksFetchError(`Unexpected response from X (HTTP ${raw.status}). ${errorBodyText(raw)}`);
 }
 
-function hasGraphqlErrors(json: any): boolean {
-  return Array.isArray(json?.errors) && json.errors.length > 0;
+function hasGraphqlErrors(json: unknown): boolean {
+  return asArray(get(json, "errors")).length > 0;
 }
 
-function graphqlErrorMessage(json: any): string {
-  const first = json?.errors?.[0];
-  const msg = first?.message ?? "GraphQL error";
+function graphqlErrorMessage(json: unknown): string {
+  const first = asArray(get(json, "errors"))[0];
+  const msg = asString(get(first, "message")) ?? "GraphQL error";
   return `X GraphQL error: ${msg}. The queryId or request shape may have changed.`;
 }
 
 function errorBodyText(raw: RawResponse): string {
-  if (raw.json?.errors?.[0]?.message) return String(raw.json.errors[0].message);
+  const first = asArray(get(raw.json, "errors"))[0];
+  const msg = asString(get(first, "message"));
+  if (msg) return msg;
   return (raw.text || "").slice(0, 300);
 }

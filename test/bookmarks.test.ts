@@ -54,7 +54,7 @@ describe("fetchAllBookmarks happy path", () => {
 
     const res = await fetchAllBookmarks({ fetchPage, maxPages: 50 });
 
-    expect(res.results.map((r) => r.rest_id)).toEqual(["1", "2", "3", "4"]);
+    expect(res.results.map((r) => (r as { rest_id: string }).rest_id)).toEqual(["1", "2", "3", "4"]);
     expect(res.stopReason).toBe("end-of-list");
     expect(res.pagesFetched).toBe(2);
   });
@@ -97,7 +97,7 @@ describe("guardrails", () => {
     const res = await fetchAllBookmarks({ fetchPage, maxPages: 50 });
     expect(res.stopReason).toBe("no-progress");
     // page 2's fresh entries are still collected before stopping
-    expect(res.results.map((r) => r.rest_id)).toEqual(["1", "2", "3", "4"]);
+    expect(res.results.map((r) => (r as { rest_id: string }).rest_id)).toEqual(["1", "2", "3", "4"]);
   });
 
   it("stops on no-progress when a page has zero new entries (caught up)", async () => {
@@ -107,7 +107,7 @@ describe("guardrails", () => {
     });
     const res = await fetchAllBookmarks({ fetchPage, maxPages: 50 });
     expect(res.stopReason).toBe("no-progress");
-    expect(res.results.map((r) => r.rest_id)).toEqual(["1", "2"]);
+    expect(res.results.map((r) => (r as { rest_id: string }).rest_id)).toEqual(["1", "2"]);
   });
 });
 
@@ -124,7 +124,7 @@ describe("incremental stopOnSeen", () => {
       stopOnSeen: true,
     });
     expect(res.stopReason).toBe("caught-up");
-    expect(res.results.map((r) => r.rest_id)).toEqual(["3", "4"]);
+    expect(res.results.map((r) => (r as { rest_id: string }).rest_id)).toEqual(["3", "4"]);
     expect(res.pagesFetched).toBe(1); // did not fetch page 2
   });
 
@@ -139,7 +139,7 @@ describe("incremental stopOnSeen", () => {
       seenIds: new Set(["1", "2"]),
     });
     expect(res.stopReason).toBe("end-of-list");
-    expect(res.results.map((r) => r.rest_id)).toEqual(["3", "4", "5", "6"]);
+    expect(res.results.map((r) => (r as { rest_id: string }).rest_id)).toEqual(["3", "4", "5", "6"]);
   });
 
   it("first backfill (nothing seen) is not stopped early by stopOnSeen", async () => {
@@ -153,7 +153,7 @@ describe("incremental stopOnSeen", () => {
       seenIds: new Set(),
       stopOnSeen: true,
     });
-    expect(res.results.map((r) => r.rest_id)).toEqual(["1", "2", "3", "4"]);
+    expect(res.results.map((r) => (r as { rest_id: string }).rest_id)).toEqual(["1", "2", "3", "4"]);
     expect(res.stopReason).toBe("end-of-list");
   });
 });
@@ -169,7 +169,7 @@ describe("resume", () => {
       maxPages: 50,
       seenIds: new Set(["1", "2"]),
     });
-    expect(res.results.map((r) => r.rest_id)).toEqual(["3", "4"]);
+    expect(res.results.map((r) => (r as { rest_id: string }).rest_id)).toEqual(["3", "4"]);
   });
 });
 
@@ -183,7 +183,7 @@ describe("rate limiting (429)", () => {
       maxPages: 50,
       sleep,
     });
-    expect(res.results.map((r) => r.rest_id)).toEqual(["1"]);
+    expect(res.results.map((r) => (r as { rest_id: string }).rest_id)).toEqual(["1"]);
     expect(sleep).toHaveBeenCalledTimes(2);
   });
 

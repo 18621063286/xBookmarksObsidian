@@ -1,3 +1,5 @@
+import { asArray, asString, get } from "../util/json";
+
 /**
  * Minimal local-Ollama client (http://localhost:11434 by default). All HTTP is
  * injected so it's testable; in the plugin it's wired to Obsidian's requestUrl.
@@ -5,7 +7,7 @@
 
 export interface OllamaResponse {
   status: number;
-  json: any;
+  json: unknown;
   text: string;
 }
 
@@ -26,10 +28,9 @@ export async function listOllamaModels(request: OllamaRequest, baseUrl: string):
   if (res.status !== 200) {
     throw new Error(`Ollama not reachable at ${baseUrl} (HTTP ${res.status}). Is \`ollama serve\` running?`);
   }
-  const models = res.json?.models ?? [];
-  return models
-    .map((m: any) => m?.name)
-    .filter((n: any): n is string => typeof n === "string" && n.length > 0);
+  return asArray(get(res.json, "models"))
+    .map((m) => asString(get(m, "name")))
+    .filter((n): n is string => typeof n === "string" && n.length > 0);
 }
 
 /** Run a single non-streaming generation and return the response text. */
@@ -46,8 +47,8 @@ export async function ollamaGenerate(
     body: JSON.stringify({ model, prompt, stream: false }),
   });
   if (res.status !== 200) {
-    const detail = res.json?.error ?? res.text ?? "";
+    const detail = asString(get(res.json, "error")) ?? res.text ?? "";
     throw new Error(`Ollama generate failed (HTTP ${res.status})${detail ? `: ${detail}` : ""}`);
   }
-  return String(res.json?.response ?? "").trim();
+  return (asString(get(res.json, "response")) ?? "").trim();
 }

@@ -89,7 +89,8 @@ export default class XBookmarksPlugin extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    this.settings = mergeSettings(await this.loadData());
+    const data = (await this.loadData()) as Partial<XBookmarksSettings> | null;
+    this.settings = mergeSettings(data);
   }
 
   async saveSettings(): Promise<void> {

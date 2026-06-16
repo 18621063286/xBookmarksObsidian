@@ -284,7 +284,8 @@ export class SyncEngine {
     const { notify } = this.deps;
     // Always log the real error (with type + message) so the dev console shows
     // the precise failure, not just the user-facing Notice summary.
-    console.warn(`[x-bookmarks] sync error [${(e as any)?.constructor?.name}]:`, e);
+    const errName = e instanceof Error ? e.constructor.name : typeof e;
+    console.warn(`[x-bookmarks] sync error [${errName}]:`, e);
 
     if (e instanceof QueryIdRotationError) {
       // Auto-recovery: force a queryId refresh and retry once.
@@ -334,7 +335,7 @@ export class SyncEngine {
       url,
       method: "GET",
       headers: { "user-agent": USER_AGENT },
-    } as any);
+    });
     return res.text ?? "";
   }
 
@@ -372,7 +373,7 @@ export class SyncEngine {
     const { app } = this.deps;
     return {
       download: async (url) => {
-        const res = await requestUrl({ url, method: "GET" } as any);
+        const res = await requestUrl({ url, method: "GET" });
         return res.arrayBuffer;
       },
       writeBinary: async (path, data) => {
