@@ -1,9 +1,11 @@
-import { Plugin, Notice } from "obsidian";
+import { Plugin, Notice, Platform } from "obsidian";
 import {
   XBookmarksSettings,
   mergeSettings,
   XBookmarksSettingTab,
 } from "./settings";
+import { loginAndCaptureCookies } from "./auth/loginWindow";
+import { validateCredentials } from "./auth/cookies";
 
 export default class XBookmarksPlugin extends Plugin {
   settings!: XBookmarksSettings;
@@ -62,7 +64,20 @@ export default class XBookmarksPlugin extends Plugin {
   // --- Wired in later units (U2 login, U7 sync). Stubbed so U1 loads standalone. ---
 
   async runLogin(): Promise<void> {
-    new Notice("X login is not wired up yet.");
+    if (!Platform.isDesktopApp) {
+      new Notice("Embedded login is desktop-only. Paste your cookie in settings to use X Bookmarks on mobile.");
+      return;
+    }
+    try {
+      new Notice("Opening X login…");
+      const creds = await loginAndCaptureCookies();
+      this.settings.authToken = creds.authToken;
+      this.settings.ct0 = creds.ct0;
+      await this.saveSettings();
+      new Notice("Logged in to X — credentials saved.");
+    } catch (e) {
+      new Notice(`X login failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   async runSync(_opts: { force?: boolean } = {}): Promise<void> {
