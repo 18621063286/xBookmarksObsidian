@@ -57,8 +57,10 @@ export default class XBookmarksPlugin extends Plugin {
     }
     if (!this.settings.scheduledSyncEnabled) return;
     const ms = Math.max(1, this.settings.scheduledSyncInterval) * 60 * 1000;
+    // Managed manually (cleared on reconfigure + onunload) rather than via
+    // registerInterval, because the interval must be replaceable at runtime —
+    // registerInterval would accumulate orphaned handles on each reconfigure.
     this.scheduleId = window.setInterval(() => this.runSync(), ms);
-    this.registerInterval(this.scheduleId);
   }
 
   // --- Wired in later units (U2 login, U7 sync). Stubbed so U1 loads standalone. ---

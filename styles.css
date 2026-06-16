@@ -1,6 +1,6 @@
 /* obsidian-x-bookmarks styles */
 
-.x-bookmarks-setting-cookie textarea {
+.x-bookmarks-setting-textarea textarea {
   width: 100%;
   min-height: 5em;
   font-family: var(--font-monospace);

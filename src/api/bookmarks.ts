@@ -21,7 +21,7 @@ export class QueryIdRotationError extends Error {}
 export class FeaturesError extends Error {}
 export class BookmarksFetchError extends Error {}
 
-export type StopReason = "complete" | "max-pages" | "no-progress" | "end-of-list";
+export type StopReason = "max-pages" | "no-progress" | "end-of-list";
 
 export interface BookmarksProgress {
   page: number;

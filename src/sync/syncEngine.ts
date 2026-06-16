@@ -111,11 +111,20 @@ export class SyncEngine {
     return fetchAllBookmarks({
       fetchPage,
       maxPages: settings.maxPages,
-      // Start from the top and stop early when we reach already-synced bookmarks.
+      // Resume a prior interrupted/truncated backfill from its saved cursor;
+      // otherwise start from the top. seenIds still stops us early once we reach
+      // already-synced bookmarks on a normal incremental run.
+      startCursor: settings.lastSyncCursor || null,
       seenIds: new Set(existing),
       onProgress: async (p) => {
         settings.lastSyncCursor = p.cursor ?? "";
-        await this.deps.saveSettings();
+        // Cursor persistence is best-effort — a disk hiccup must not abort the
+        // in-flight fetch loop (the in-memory cursor is already updated).
+        try {
+          await this.deps.saveSettings();
+        } catch (e) {
+          console.warn("[x-bookmarks] failed to persist sync progress:", e);
+        }
       },
     });
   }
@@ -153,7 +162,10 @@ export class SyncEngine {
     }
 
     settings.lastSyncAt = bookmarkedAt;
-    settings.lastSyncCursor = ""; // completed cleanly; next run starts from top
+    // Only clear the resume cursor when the walk actually finished. On a
+    // max-pages stop we keep it so the next run continues the deep backfill
+    // instead of restarting from the top and stopping at the first seen page.
+    if (result.stopReason !== "max-pages") settings.lastSyncCursor = "";
     await this.deps.saveSettings();
 
     const parts = [`${created} new`];
@@ -174,6 +186,8 @@ export class SyncEngine {
       // Auto-recovery: force a queryId refresh and retry once.
       try {
         notify("Bookmarks queryId may have rotated — refreshing and retrying…");
+        // Cursors are not portable across queryId changes — start the retry fresh.
+        this.deps.settings.lastSyncCursor = "";
         const refreshed = await forceRefreshQueryId(this.queryDeps());
         const result = await this.fetchWith(refreshed.queryId, creds, existing);
         await this.writeAll(result, existing, opts);
@@ -245,8 +259,11 @@ export class SyncEngine {
     if (existing instanceof TFolder) return;
     try {
       await app.vault.createFolder(path);
-    } catch {
-      // already exists (race) — ignore
+    } catch (e) {
+      // A concurrent create is benign; anything else (permissions, illegal path)
+      // should surface rather than masquerade as a later vault.create failure.
+      const m = e instanceof Error ? e.message.toLowerCase() : "";
+      if (!m.includes("already exists") && !m.includes("exist")) throw e;
     }
   }
 

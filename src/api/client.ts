@@ -103,9 +103,18 @@ export const obsidianRequest: RequestFn = async ({ url, method, headers }) => {
     const res = await requestUrl({ url, method, headers, throw: false } as any);
     return { status: res.status, json: safeJson(res), text: res.text ?? "" };
   } catch (e: any) {
-    // Older requestUrl throws on non-2xx; recover the status if present.
+    // Older requestUrl throws on non-2xx; recover the status AND any body so
+    // 400-feature / GraphQL-error classification still works on those builds.
     if (typeof e?.status === "number") {
-      return { status: e.status, json: undefined, text: String(e?.message ?? "") };
+      let json: any = e?.json;
+      if (json === undefined && typeof e?.body === "string") {
+        try {
+          json = JSON.parse(e.body);
+        } catch {
+          /* leave json undefined */
+        }
+      }
+      return { status: e.status, json, text: String(e?.body ?? e?.message ?? "") };
     }
     throw e;
   }

@@ -28,9 +28,24 @@ const EXT_BY_TYPE: Record<BookmarkMedia["type"], string> = {
   gif: "mp4",
 };
 
+// Only ever write a known-safe media extension; never let an arbitrary URL path
+// choose the on-disk extension.
+const ALLOWED_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp", "mp4", "mov", "webm"]);
+
 function extFromUrl(url: string, fallback: string): string {
   const m = url.split("?")[0].match(/\.([a-zA-Z0-9]{2,4})$/);
-  return m ? m[1] : fallback;
+  const ext = m ? m[1].toLowerCase() : "";
+  return ALLOWED_EXTS.has(ext) ? ext : fallback;
+}
+
+/** Only fetch media from X's own CDNs — the URLs come from tweet JSON, not us. */
+function isAllowedMediaHost(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" && (u.hostname === "twimg.com" || u.hostname.endsWith(".twimg.com"));
+  } catch {
+    return false;
+  }
 }
 
 /** Localize a single tweet's media (not its quoted tweet). */
@@ -45,6 +60,10 @@ export async function localizeMedia(
 
   for (let i = 0; i < media.length; i++) {
     const item = media[i];
+    if (!isAllowedMediaHost(item.remoteUrl)) {
+      io.warn?.(`media url not on an X CDN, keeping remote url: ${item.remoteUrl}`);
+      continue;
+    }
     const ext = extFromUrl(item.remoteUrl, EXT_BY_TYPE[item.type]);
     const filename = `${tweetId}-${i}.${ext}`;
     const path = `${attachmentsFolder}/${filename}`;

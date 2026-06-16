@@ -28,6 +28,9 @@ export function parseCookieString(raw: string): Partial<Credentials> {
     if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
       value = value.slice(1, -1);
     }
+    // Reject values carrying control chars / separators that could break or
+    // inject into the Cookie header. Real auth_token/ct0 never contain these.
+    if (/[\r\n;]/.test(value)) continue;
     if (key === "auth_token" && value) out.authToken = value;
     else if (key === "ct0" && value) out.ct0 = value;
   }

@@ -87,9 +87,22 @@ export function loginAndCaptureCookies(opts: LoginOptions = {}): Promise<Credent
       if (settled) return;
       try {
         const session = win.webContents.session;
-        const cookies = await session.cookies.get({ url: "https://x.com" });
-        const authToken = cookies.find((c: any) => c.name === "auth_token")?.value;
-        const ct0 = cookies.find((c: any) => c.name === "ct0")?.value;
+        // Query both the host and leading-dot domain forms; the same cookie name
+        // can appear in both result sets (weread prior art). Dedup by name.
+        const byName = new Map<string, string>();
+        for (const filter of [{ url: "https://x.com" }, { domain: ".x.com" }, { domain: "x.com" }]) {
+          let cookies: any[] = [];
+          try {
+            cookies = await session.cookies.get(filter as any);
+          } catch {
+            continue;
+          }
+          for (const c of cookies) {
+            if (!byName.has(c.name) && c.value) byName.set(c.name, decode(c.value));
+          }
+        }
+        const authToken = byName.get("auth_token");
+        const ct0 = byName.get("ct0");
         if (authToken && ct0) {
           settle(() => resolve({ authToken, ct0 }));
         }
@@ -115,6 +128,15 @@ export function loginAndCaptureCookies(opts: LoginOptions = {}): Promise<Credent
 
     win.loadURL(opts.loginUrl ?? DEFAULT_LOGIN_URL);
   });
+}
+
+/** Cookie values can arrive percent-encoded; decode defensively. */
+function decode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 /** True once the browser has navigated past the login flow into the app. */

@@ -36,7 +36,7 @@ describe("localizeMedia", () => {
 
   it("indexes multiple media items by position", async () => {
     const io = fakeIO();
-    const media = [photo("https://pbs/a.jpg"), photo("https://pbs/b.jpg")];
+    const media = [photo("https://pbs.twimg.com/a.jpg"), photo("https://pbs.twimg.com/b.jpg")];
     await localizeMedia("9", media, "att", io);
     expect(media.map((m) => m.url)).toEqual(["att/9-0.jpg", "att/9-1.jpg"]);
   });
@@ -52,7 +52,7 @@ describe("localizeMedia", () => {
 
   it("skips re-downloading when the file already exists but still rewrites url", async () => {
     const io = fakeIO({ exists: vi.fn(() => true) });
-    const media = [photo("https://pbs/a.jpg")];
+    const media = [photo("https://pbs.twimg.com/a.jpg")];
     await localizeMedia("123", media, "att", io);
     expect(io.download).not.toHaveBeenCalled();
     expect(media[0].url).toBe("att/123-0.jpg");
@@ -64,9 +64,9 @@ describe("localizeMedia", () => {
         throw new Error("network");
       }),
     });
-    const media = [photo("https://pbs/a.jpg")];
+    const media = [photo("https://pbs.twimg.com/a.jpg")];
     await localizeMedia("123", media, "att", io);
-    expect(media[0].url).toBe("https://pbs/a.jpg"); // unchanged
+    expect(media[0].url).toBe("https://pbs.twimg.com/a.jpg"); // unchanged
     expect(io.warn).toHaveBeenCalled();
   });
 
@@ -75,6 +75,23 @@ describe("localizeMedia", () => {
     await localizeMedia("1", [], "att", io);
     expect(io.ensureFolder).not.toHaveBeenCalled();
   });
+
+  it("skips media not hosted on an X CDN (keeps remote url, never downloads)", async () => {
+    const io = fakeIO();
+    const media = [photo("https://evil.example.com/a.jpg")];
+    await localizeMedia("1", media, "att", io);
+    expect(io.download).not.toHaveBeenCalled();
+    expect(media[0].url).toBe("https://evil.example.com/a.jpg");
+    expect(io.warn).toHaveBeenCalled();
+  });
+
+  it("rejects a non-https X CDN url", async () => {
+    const io = fakeIO();
+    const media = [photo("http://pbs.twimg.com/a.jpg")];
+    await localizeMedia("1", media, "att", io);
+    expect(io.download).not.toHaveBeenCalled();
+    expect(media[0].url).toBe("http://pbs.twimg.com/a.jpg");
+  });
 });
 
 describe("localizeBookmarkMedia", () => {
@@ -82,11 +99,11 @@ describe("localizeBookmarkMedia", () => {
     const io = fakeIO();
     const quoted = {
       tweetId: "999",
-      media: [photo("https://pbs/q.jpg")],
+      media: [photo("https://pbs.twimg.com/q.jpg")],
     } as Bookmark;
     const bookmark = {
       tweetId: "1",
-      media: [photo("https://pbs/m.jpg")],
+      media: [photo("https://pbs.twimg.com/m.jpg")],
       quoted,
     } as Bookmark;
 

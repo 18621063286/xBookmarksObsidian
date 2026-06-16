@@ -1,11 +1,7 @@
 import { App, PluginSettingTab, Setting, Platform } from "obsidian";
 import type XBookmarksPlugin from "./main";
 import { parseCookieString, validateCredentials } from "./auth/cookies";
-
-export interface QueryIdCache {
-  value: string;
-  fetchedAt: number; // epoch ms
-}
+import type { QueryIdCacheEntry } from "./api/queryId";
 
 export interface XBookmarksSettings {
   /** X session credentials (captured via embedded login or pasted manually). */
@@ -22,7 +18,7 @@ export interface XBookmarksSettings {
   /** Manual override for the static web bearer token (rarely needed). */
   bearerOverride: string;
   /** TTL-cached auto-discovered queryId. */
-  queryIdCache: QueryIdCache | null;
+  queryIdCache: QueryIdCacheEntry | null;
 
   /** Scheduled sync. */
   scheduledSyncEnabled: boolean;
@@ -97,7 +93,7 @@ export class XBookmarksSettingTab extends PluginSettingTab {
       .setDesc(
         "Mobile / manual fallback. Paste a cookie string containing auth_token and ct0."
       )
-      .setClass("x-bookmarks-setting-cookie")
+      .setClass("x-bookmarks-setting-textarea")
       .addTextArea((ta) =>
         ta
           .setPlaceholder("auth_token=...; ct0=...")
@@ -130,7 +126,7 @@ export class XBookmarksSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Custom template")
       .setDesc("Optional Nunjucks template. Leave empty to use the bundled default.")
-      .setClass("x-bookmarks-setting-cookie")
+      .setClass("x-bookmarks-setting-textarea")
       .addTextArea((ta) =>
         ta
           .setValue(this.plugin.settings.template)
