@@ -17,10 +17,15 @@ export class Plugin {
   async saveData(_data: any): Promise<void> {}
   addCommand(_cmd: any): any {}
   addSettingTab(_tab: any): void {}
+  addRibbonIcon(_icon: string, _title: string, _cb: any): any {
+    return { addClass() {} };
+  }
   registerInterval(id: number): number {
     return id;
   }
 }
+
+export function addIcon(_id: string, _svg: string): void {}
 
 export class PluginSettingTab {
   app: any;

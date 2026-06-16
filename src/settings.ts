@@ -33,6 +33,9 @@ export interface XBookmarksSettings {
   /** Resumable-sync progress + bookkeeping. */
   lastSyncCursor: string;
   lastSyncAt: string;
+  /** Set once the full bookmark history has been walked end-to-end. After this,
+   *  syncs stop early at the first already-synced bookmark (incremental). */
+  backfillComplete: boolean;
 }
 
 export const DEFAULT_SETTINGS: XBookmarksSettings = {
@@ -49,6 +52,7 @@ export const DEFAULT_SETTINGS: XBookmarksSettings = {
   maxPages: 50,
   lastSyncCursor: "",
   lastSyncAt: "",
+  backfillComplete: false,
 };
 
 /**

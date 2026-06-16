@@ -118,6 +118,9 @@ export class SyncEngine {
       // normal incremental run stop early once it reaches already-synced tweets.
       startCursor: null,
       seenIds: new Set(existing),
+      // Once the full history is backfilled, stop at the first already-synced
+      // bookmark so routine syncs only fetch what's new.
+      stopOnSeen: settings.backfillComplete,
       onProgress: async (p) => {
         settings.lastSyncCursor = p.cursor ?? "";
         // Cursor persistence is best-effort — a disk hiccup must not abort the
@@ -148,18 +151,14 @@ export class SyncEngine {
     // Guards against double-create when a file made earlier in THIS run isn't
     // yet visible via getAbstractFileByPath (metadataCache/vault lag).
     const writtenThisRun = new Set<string>();
+    // Notes written this run, for the optional best-effort media pass.
+    const written: { path: string; bookmark: Bookmark }[] = [];
 
+    // --- Phase 1: write note TEXT first (X CDN media links). ---
+    // Text is the priority; it lands fast and reliably even if media is slow or
+    // fails. Each note is isolated so one bad write can't abort the batch.
     for (const b of plan.toCreate) {
-      // One bad bookmark (media hiccup, vault race) must never abort the whole
-      // sync — isolate each note and keep going.
       try {
-        if (settings.downloadMedia) {
-          try {
-            await localizeBookmarkMedia(b, `${settings.noteFolder}/_attachments`, this.mediaIO());
-          } catch (e) {
-            console.warn(`[x-bookmarks] media localization failed for ${b.tweetId}:`, e);
-          }
-        }
         const { filename, content } = renderNote(b, { bookmarkedAt, template: settings.template });
         const path = normalizePath(`${settings.noteFolder}/${filename}`);
         const file = app.vault.getAbstractFileByPath(path);
@@ -170,13 +169,14 @@ export class SyncEngine {
             await app.vault.create(path, content);
             created++;
             writtenThisRun.add(path);
+            written.push({ path, bookmark: b });
           } catch (e) {
-            // A concurrent/duplicate create is benign — treat as already-present.
             if (!/already exists/i.test(String(e instanceof Error ? e.message : e))) throw e;
           }
         } else if (action === "modify" && file instanceof TFile) {
           await app.vault.modify(file, content);
           modified++;
+          written.push({ path, bookmark: b });
         }
       } catch (e) {
         failed++;
@@ -184,9 +184,20 @@ export class SyncEngine {
       }
     }
 
+    // The full history has been walked end-to-end at least once -> future syncs
+    // can stop early at the first already-synced bookmark.
+    if (result.stopReason === "end-of-list" || result.stopReason === "caught-up") {
+      settings.backfillComplete = true;
+    }
     settings.lastSyncAt = bookmarkedAt;
     settings.lastSyncCursor = ""; // we always start from the top; cursor is diagnostic only
     await this.deps.saveSettings();
+
+    const parts = [`${created} new`];
+    if (opts.force) parts.push(`${modified} re-rendered`);
+    parts.push(`${plan.skipped.length} skipped`);
+    if (failed) parts.push(`${failed} failed`);
+    notify(`X bookmarks synced — ${parts.join(", ")}.`);
 
     if (result.stopReason === "max-pages") {
       notify(
@@ -194,11 +205,50 @@ export class SyncEngine {
       );
     }
 
-    const parts = [`${created} new`];
-    if (opts.force) parts.push(`${modified} re-rendered`);
-    parts.push(`${plan.skipped.length} skipped`);
-    if (failed) parts.push(`${failed} failed`);
-    notify(`X bookmarks synced — ${parts.join(", ")} (stopped: ${result.stopReason}).`);
+    // --- Phase 2: best-effort attachment download (text is already saved). ---
+    // Runs after the success notice; failures are logged and skipped.
+    if (settings.downloadMedia && written.length) {
+      await this.localizeWritten(written, bookmarkedAt);
+    }
+  }
+
+  /** Download attachments for already-written notes and rewrite their links to
+   *  local paths. Best-effort: failures keep the X CDN link and never block. */
+  private async localizeWritten(
+    written: { path: string; bookmark: Bookmark }[],
+    bookmarkedAt: string
+  ): Promise<void> {
+    const { app, settings, notify } = this.deps;
+    const attachments = `${settings.noteFolder}/_attachments`;
+    let localized = 0;
+    let mediaFailed = 0;
+
+    for (const { path, bookmark } of written) {
+      const before = mediaUrls(bookmark);
+      try {
+        await localizeBookmarkMedia(bookmark, attachments, this.mediaIO());
+      } catch (e) {
+        mediaFailed++;
+        console.warn(`[x-bookmarks] media download failed for ${bookmark.tweetId}:`, e);
+        continue;
+      }
+      if (mediaUrls(bookmark) === before) continue; // nothing localized
+      try {
+        const file = app.vault.getAbstractFileByPath(normalizePath(path));
+        if (file instanceof TFile) {
+          const { content } = renderNote(bookmark, { bookmarkedAt, template: settings.template });
+          await app.vault.modify(file, content);
+          localized++;
+        }
+      } catch (e) {
+        mediaFailed++;
+        console.warn(`[x-bookmarks] failed to update note with local media ${bookmark.tweetId}:`, e);
+      }
+    }
+
+    if (localized || mediaFailed) {
+      notify(`Attachments: ${localized} downloaded${mediaFailed ? `, ${mediaFailed} failed` : ""}.`);
+    }
   }
 
   private async handleError(
@@ -316,4 +366,12 @@ export class SyncEngine {
 
 function msg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+/** Snapshot a bookmark's (and its quoted tweet's) media urls, to detect whether
+ *  a localization pass actually changed anything before re-writing the note. */
+function mediaUrls(b: Bookmark): string {
+  const urls = b.media.map((m) => m.url);
+  if (b.quoted) urls.push(...b.quoted.media.map((m) => m.url));
+  return urls.join("|");
 }

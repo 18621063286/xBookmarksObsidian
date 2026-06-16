@@ -111,6 +111,53 @@ describe("guardrails", () => {
   });
 });
 
+describe("incremental stopOnSeen", () => {
+  it("stops at the first page containing an already-synced bookmark", async () => {
+    const pages: Record<string, RawResponse> = {
+      "null": page(["1", "2", "3", "4"], "c1"), // 1,2 already synced; 3,4 new
+      c1: page(["5", "6"], null),
+    };
+    const res = await fetchAllBookmarks({
+      fetchPage: async (c) => pages[String(c)],
+      maxPages: 50,
+      seenIds: new Set(["1", "2"]),
+      stopOnSeen: true,
+    });
+    expect(res.stopReason).toBe("caught-up");
+    expect(res.results.map((r) => r.rest_id)).toEqual(["3", "4"]);
+    expect(res.pagesFetched).toBe(1); // did not fetch page 2
+  });
+
+  it("without stopOnSeen it keeps paginating through the backlog", async () => {
+    const pages: Record<string, RawResponse> = {
+      "null": page(["1", "2", "3", "4"], "c1"),
+      c1: page(["5", "6"], null),
+    };
+    const res = await fetchAllBookmarks({
+      fetchPage: async (c) => pages[String(c)],
+      maxPages: 50,
+      seenIds: new Set(["1", "2"]),
+    });
+    expect(res.stopReason).toBe("end-of-list");
+    expect(res.results.map((r) => r.rest_id)).toEqual(["3", "4", "5", "6"]);
+  });
+
+  it("first backfill (nothing seen) is not stopped early by stopOnSeen", async () => {
+    const pages: Record<string, RawResponse> = {
+      "null": page(["1", "2"], "c1"),
+      c1: page(["3", "4"], null),
+    };
+    const res = await fetchAllBookmarks({
+      fetchPage: async (c) => pages[String(c)],
+      maxPages: 50,
+      seenIds: new Set(),
+      stopOnSeen: true,
+    });
+    expect(res.results.map((r) => r.rest_id)).toEqual(["1", "2", "3", "4"]);
+    expect(res.stopReason).toBe("end-of-list");
+  });
+});
+
 describe("resume", () => {
   it("skips already-seen ids supplied via seenIds", async () => {
     const pages: Record<string, RawResponse> = {

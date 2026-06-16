@@ -21,7 +21,7 @@ export class QueryIdRotationError extends Error {}
 export class FeaturesError extends Error {}
 export class BookmarksFetchError extends Error {}
 
-export type StopReason = "max-pages" | "no-progress" | "end-of-list";
+export type StopReason = "max-pages" | "no-progress" | "end-of-list" | "caught-up";
 
 export interface BookmarksProgress {
   page: number;
@@ -36,6 +36,10 @@ export interface FetchBookmarksOptions {
   startCursor?: string | null;
   /** Ids already collected in a prior run (enables resume + no-progress stop). */
   seenIds?: Set<string>;
+  /** Incremental mode: stop at the first page that contains an already-seen
+   *  bookmark (after collecting the new ones on it). Used once the initial
+   *  backfill is complete so we don't re-walk the whole history each sync. */
+  stopOnSeen?: boolean;
   onProgress?: (p: BookmarksProgress) => void | Promise<void>;
   maxBackoffRetries?: number;
   backoffBaseMs?: number;
@@ -98,6 +102,14 @@ export async function fetchAllBookmarks(opts: FetchBookmarksOptions): Promise<Fe
     if (bottomCursor === cursor || newEntries.length === 0) {
       collect(newEntries);
       return finish("no-progress");
+    }
+
+    // Incremental stop: this page straddles the boundary between new and
+    // already-synced bookmarks (timeline is newest-first), so everything below
+    // is already saved — collect the new ones here and stop.
+    if (opts.stopOnSeen && newEntries.length < tweetEntries.length) {
+      collect(newEntries);
+      return finish("caught-up");
     }
 
     collect(newEntries);
