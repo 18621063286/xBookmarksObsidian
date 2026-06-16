@@ -52,14 +52,14 @@ export default class XBookmarksPlugin extends Plugin {
     this.addSettingTab(new XBookmarksSettingTab(this.app, this));
 
     this.addCommand({
-      id: "sync-x-bookmarks",
-      name: "Sync X bookmarks",
+      id: "sync-bookmarks",
+      name: "Sync bookmarks",
       callback: () => this.runSync(),
     });
 
     this.addCommand({
-      id: "force-resync-x-bookmarks",
-      name: "Force re-render all X bookmarks",
+      id: "force-resync-bookmarks",
+      name: "Force re-render all bookmarks",
       callback: () => this.runSync({ force: true }),
     });
 
@@ -107,7 +107,7 @@ export default class XBookmarksPlugin extends Plugin {
     // Managed manually (cleared on reconfigure + onunload) rather than via
     // registerInterval, because the interval must be replaceable at runtime —
     // registerInterval would accumulate orphaned handles on each reconfigure.
-    this.scheduleId = window.setInterval(() => this.runSync(), ms);
+    this.scheduleId = window.setInterval(() => void this.runSync(), ms);
   }
 
   // --- Wired in later units (U2 login, U7 sync). Stubbed so U1 loads standalone. ---

@@ -102,7 +102,7 @@ export class XBookmarksSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "X Bookmarks" });
+    new Setting(containerEl).setName("X Bookmarks").setHeading();
 
     // --- Account / login ---
     const creds = validateCredentials(this.plugin.settings);
@@ -225,7 +225,7 @@ export class XBookmarksSettingTab extends PluginSettingTab {
       );
 
     // --- AI digest ---
-    containerEl.createEl("h3", { text: "AI digest (local Ollama)" });
+    new Setting(containerEl).setName("AI digest (local Ollama)").setHeading();
 
     new Setting(containerEl)
       .setName("Enable AI digest")
@@ -295,7 +295,7 @@ export class XBookmarksSettingTab extends PluginSettingTab {
     }
 
     // --- Advanced ---
-    containerEl.createEl("h3", { text: "Advanced" });
+    new Setting(containerEl).setName("Advanced").setHeading();
 
     new Setting(containerEl)
       .setName("queryId override")

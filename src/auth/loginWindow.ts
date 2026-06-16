@@ -3,23 +3,25 @@ import type { Credentials } from "./cookies";
 
 /**
  * Embedded X login via an Electron BrowserWindow (KTD1, mirrors weread's
- * wereadLoginModel). Desktop-only; Electron is lazy-`require`d inside the
- * function so this module is import-safe on mobile and in tests.
+ * wereadLoginModel). Desktop-only; Electron is loaded with a lazy dynamic
+ * import inside the function so this module is import-safe on mobile and in tests.
  */
 
-function getRemote(): any {
-  // Obsidian historically exposes electron's remote on the sandboxed require.
+interface RemoteLike {
+  BrowserWindow: ElectronBrowserWindowCtor;
+}
+
+async function getRemote(): Promise<RemoteLike | null> {
+  // Obsidian historically exposes electron's remote on the sandboxed module.
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const electron = require("electron");
-    if (electron?.remote?.BrowserWindow) return electron.remote;
+    const electron = await import("electron");
+    if (electron.remote?.BrowserWindow) return electron.remote;
   } catch {
     /* ignore */
   }
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const remote = require("@electron/remote");
-    if (remote?.BrowserWindow) return remote;
+    const remote = await import("@electron/remote");
+    if (remote?.BrowserWindow) return { BrowserWindow: remote.BrowserWindow };
   } catch {
     /* ignore */
   }
@@ -38,20 +40,16 @@ const DEFAULT_LOGIN_URL = "https://x.com/i/flow/login";
  * and `ct0` cookies are present. Rejects if the window is closed first or the
  * platform can't host it.
  */
-export function loginAndCaptureCookies(opts: LoginOptions = {}): Promise<Credentials> {
+export async function loginAndCaptureCookies(opts: LoginOptions = {}): Promise<Credentials> {
   if (!Platform.isDesktopApp) {
-    return Promise.reject(
-      new Error("Embedded login is desktop-only. On mobile, paste your cookie manually in settings.")
-    );
+    throw new Error("Embedded login is desktop-only. On mobile, paste your cookie manually in settings.");
   }
 
-  const remote = getRemote();
+  const remote = await getRemote();
   if (!remote?.BrowserWindow) {
-    return Promise.reject(
-      new Error(
-        "Could not access Electron BrowserWindow (remote unavailable in this Obsidian build). " +
-          "Use the manual cookie-paste fallback in settings."
-      )
+    throw new Error(
+      "Could not access Electron BrowserWindow (remote unavailable in this Obsidian build). " +
+        "Use the manual cookie-paste fallback in settings."
     );
   }
 
@@ -90,10 +88,15 @@ export function loginAndCaptureCookies(opts: LoginOptions = {}): Promise<Credent
         // Query both the host and leading-dot domain forms; the same cookie name
         // can appear in both result sets (weread prior art). Dedup by name.
         const byName = new Map<string, string>();
-        for (const filter of [{ url: "https://x.com" }, { domain: ".x.com" }, { domain: "x.com" }]) {
-          let cookies: any[] = [];
+        const filters: Record<string, string>[] = [
+          { url: "https://x.com" },
+          { domain: ".x.com" },
+          { domain: "x.com" },
+        ];
+        for (const filter of filters) {
+          let cookies: ElectronCookie[] = [];
           try {
-            cookies = await session.cookies.get(filter as any);
+            cookies = await session.cookies.get(filter);
           } catch {
             continue;
           }
@@ -126,11 +129,11 @@ export function loginAndCaptureCookies(opts: LoginOptions = {}): Promise<Credent
       }
     });
 
-    win.loadURL(opts.loginUrl ?? DEFAULT_LOGIN_URL).catch((err: any) => {
+    win.loadURL(opts.loginUrl ?? DEFAULT_LOGIN_URL).catch((err: unknown) => {
       // ERR_ABORTED fires when our own navigation-capture interrupts the load —
       // benign. Surface anything else as a clean rejection instead of an
       // unhandled promise rejection in the console.
-      const msg = String(err?.message ?? err);
+      const msg = err instanceof Error ? err.message : String(err);
       if (/ERR_ABORTED/.test(msg)) return;
       if (!settled) {
         settled = true;

@@ -54,7 +54,7 @@ export interface FetchBookmarksResult {
   pagesFetched: number;
 }
 
-const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const defaultSleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
 
 export async function fetchAllBookmarks(opts: FetchBookmarksOptions): Promise<FetchBookmarksResult> {
   const {
