@@ -6,6 +6,7 @@ import {
 } from "./settings";
 import { loginAndCaptureCookies } from "./auth/loginWindow";
 import { SyncEngine } from "./sync/syncEngine";
+import { DigestEngine } from "./sync/digestEngine";
 
 export default class XBookmarksPlugin extends Plugin {
   settings!: XBookmarksSettings;
@@ -40,6 +41,12 @@ export default class XBookmarksPlugin extends Plugin {
       id: "login-x",
       name: "Log in to X",
       callback: () => this.runLogin(),
+    });
+
+    this.addCommand({
+      id: "rebuild-ai-digest",
+      name: "Rebuild AI digest from all bookmarks",
+      callback: () => this.rebuildDigest(),
     });
 
     this.reconfigureSchedule();
@@ -103,9 +110,62 @@ export default class XBookmarksPlugin extends Plugin {
         saveSettings: () => this.saveSettings(),
         notify: (msg) => new Notice(msg),
       });
-      await engine.run(opts);
+      const newBookmarks = await engine.run(opts);
+      if (this.settings.aiEnabled && newBookmarks.length) {
+        try {
+          await this.digestEngine().processNewBookmarks(newBookmarks);
+        } catch (e) {
+          new Notice(`AI digest failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
     } catch (e) {
       new Notice(`X bookmark sync error: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      this.syncing = false;
+    }
+  }
+
+  private digestEngine(): DigestEngine {
+    return new DigestEngine(
+      this.app,
+      this.settings,
+      (msg) => new Notice(msg),
+      this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`
+    );
+  }
+
+  /** Re-fetch all bookmarks and rebuild the monthly AI digest from scratch. */
+  async rebuildDigest(): Promise<void> {
+    if (this.syncing) {
+      new Notice("A sync/digest is already running…");
+      return;
+    }
+    if (!this.settings.aiEnabled) {
+      new Notice("Enable AI digest in settings first.");
+      return;
+    }
+    if (!this.settings.ollamaModel) {
+      new Notice("Pick an Ollama model in settings first.");
+      return;
+    }
+    this.syncing = true;
+    try {
+      new Notice("Fetching all bookmarks for the AI digest…");
+      const engine = new SyncEngine({
+        app: this.app,
+        settings: this.settings,
+        saveSettings: () => this.saveSettings(),
+        notify: (msg) => new Notice(msg),
+      });
+      const all = await engine.fetchAllParsed();
+      if (!all.length) {
+        new Notice("No bookmarks fetched.");
+        return;
+      }
+      new Notice(`Analyzing ${all.length} bookmarks with Ollama — this can take a while…`);
+      await this.digestEngine().rebuildAll(all);
+    } catch (e) {
+      new Notice(`Rebuild digest failed: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       this.syncing = false;
     }

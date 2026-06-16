@@ -1,7 +1,9 @@
-import { App, PluginSettingTab, Setting, Platform } from "obsidian";
+import { App, PluginSettingTab, Setting, Platform, Notice } from "obsidian";
 import type XBookmarksPlugin from "./main";
 import { parseCookieString, validateCredentials } from "./auth/cookies";
 import type { QueryIdCacheEntry } from "./api/queryId";
+import { listOllamaModels } from "./ai/ollama";
+import { obsidianOllamaRequest } from "./sync/digestEngine";
 
 export interface XBookmarksSettings {
   /** X session credentials (captured via embedded login or pasted manually). */
@@ -30,6 +32,13 @@ export interface XBookmarksSettings {
   /** Pagination guardrails. */
   maxPages: number;
 
+  /** AI digest (local Ollama). */
+  aiEnabled: boolean;
+  ollamaUrl: string;
+  ollamaModel: string;
+  /** Digest filename, written in the parent folder of noteFolder. */
+  digestFile: string;
+
   /** Resumable-sync progress + bookkeeping. */
   lastSyncCursor: string;
   lastSyncAt: string;
@@ -50,6 +59,10 @@ export const DEFAULT_SETTINGS: XBookmarksSettings = {
   scheduledSyncInterval: 60,
   downloadMedia: false,
   maxPages: 50,
+  aiEnabled: false,
+  ollamaUrl: "http://localhost:11434",
+  ollamaModel: "",
+  digestFile: "X Bookmarks Digest.md",
   lastSyncCursor: "",
   lastSyncAt: "",
   backfillComplete: false,
@@ -65,10 +78,25 @@ export function mergeSettings(loaded: Partial<XBookmarksSettings> | null | undef
 
 export class XBookmarksSettingTab extends PluginSettingTab {
   plugin: XBookmarksPlugin;
+  /** Models fetched from Ollama for the dropdown (transient, not persisted). */
+  private availableModels: string[] = [];
 
   constructor(app: App, plugin: XBookmarksPlugin) {
     super(app, plugin);
     this.plugin = plugin;
+  }
+
+  private async refreshModels(): Promise<void> {
+    try {
+      new Notice("Fetching Ollama models…");
+      this.availableModels = await listOllamaModels(obsidianOllamaRequest, this.plugin.settings.ollamaUrl);
+      if (this.availableModels.length === 0) {
+        new Notice("No Ollama models found. Run `ollama pull <model>` first.");
+      }
+      this.display();
+    } catch (e) {
+      new Notice(`Ollama: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   display(): void {
@@ -195,6 +223,76 @@ export class XBookmarksSettingTab extends PluginSettingTab {
             }
           })
       );
+
+    // --- AI digest ---
+    containerEl.createEl("h3", { text: "AI digest (local Ollama)" });
+
+    new Setting(containerEl)
+      .setName("Enable AI digest")
+      .setDesc(
+        "After each sync, summarize new bookmarks by month into a digest note, using your local Ollama. Nothing leaves your machine."
+      )
+      .addToggle((tg) =>
+        tg.setValue(this.plugin.settings.aiEnabled).onChange(async (value) => {
+          this.plugin.settings.aiEnabled = value;
+          await this.plugin.saveSettings();
+          this.display();
+        })
+      );
+
+    if (this.plugin.settings.aiEnabled) {
+      new Setting(containerEl)
+        .setName("Ollama URL")
+        .setDesc("Default http://localhost:11434")
+        .addText((text) =>
+          text.setValue(this.plugin.settings.ollamaUrl).onChange(async (value) => {
+            this.plugin.settings.ollamaUrl = value.trim() || "http://localhost:11434";
+            await this.plugin.saveSettings();
+          })
+        );
+
+      const models =
+        this.availableModels.length > 0
+          ? this.availableModels
+          : this.plugin.settings.ollamaModel
+          ? [this.plugin.settings.ollamaModel]
+          : [];
+      new Setting(containerEl)
+        .setName("Model")
+        .setDesc("Locally installed Ollama model. Click Refresh to load the list.")
+        .addDropdown((dd) => {
+          if (models.length === 0) dd.addOption("", "— refresh to load —");
+          for (const m of models) dd.addOption(m, m);
+          dd.setValue(this.plugin.settings.ollamaModel || "");
+          dd.onChange(async (value) => {
+            this.plugin.settings.ollamaModel = value;
+            await this.plugin.saveSettings();
+          });
+        })
+        .addButton((btn) => btn.setButtonText("Refresh").onClick(() => this.refreshModels()));
+
+      new Setting(containerEl)
+        .setName("Digest file")
+        .setDesc("Markdown file (in the parent folder of your note folder) holding the monthly summaries.")
+        .addText((text) =>
+          text.setValue(this.plugin.settings.digestFile).onChange(async (value) => {
+            this.plugin.settings.digestFile = value.trim() || "X Bookmarks Digest.md";
+            await this.plugin.saveSettings();
+          })
+        );
+
+      new Setting(containerEl)
+        .setName("Rebuild digest")
+        .setDesc(
+          "Re-fetch ALL bookmarks and regenerate the whole digest. Run once to cover bookmarks you synced before enabling AI."
+        )
+        .addButton((btn) =>
+          btn
+            .setButtonText("Rebuild now")
+            .setCta()
+            .onClick(() => this.plugin.rebuildDigest())
+        );
+    }
 
     // --- Advanced ---
     containerEl.createEl("h3", { text: "Advanced" });

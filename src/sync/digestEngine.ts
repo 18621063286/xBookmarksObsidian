@@ -1,0 +1,142 @@
+import { App, normalizePath, requestUrl, TFile } from "obsidian";
+import type { XBookmarksSettings } from "../settings";
+import type { Bookmark } from "../model/types";
+import { ollamaGenerate, type OllamaRequest } from "../ai/ollama";
+import {
+  type DigestStore,
+  bookmarkToRecord,
+  addRecords,
+  buildMonthPrompt,
+  renderMonthSection,
+  mergeDigest,
+} from "../ai/digest";
+
+/** Obsidian-backed Ollama transport over requestUrl (used by the engine + settings UI). */
+export const obsidianOllamaRequest: OllamaRequest = async ({ url, method, headers, body }) => {
+  const res = await requestUrl({ url, method, headers, body, throw: false } as any);
+  let json: any;
+  try {
+    json = res.json;
+  } catch {
+    try {
+      json = JSON.parse(res.text);
+    } catch {
+      json = undefined;
+    }
+  }
+  return { status: res.status, json, text: res.text ?? "" };
+};
+
+const DIGEST_TITLE = "X 书签月度摘要";
+
+/**
+ * Maintains the monthly AI digest: keeps a compact sidecar store of bookmark
+ * records, regenerates the months touched by a sync via local Ollama, and merges
+ * them into a single digest note (newest month on top). Entirely best-effort.
+ */
+export class DigestEngine {
+  constructor(
+    private app: App,
+    private settings: XBookmarksSettings,
+    private notify: (msg: string) => void,
+    private manifestDir: string
+  ) {}
+
+  /** Add this sync's new bookmarks and regenerate only the affected months. */
+  async processNewBookmarks(newBookmarks: Bookmark[]): Promise<void> {
+    if (!this.settings.aiEnabled || !this.settings.ollamaModel || newBookmarks.length === 0) return;
+    const store = await this.loadStore();
+    const touched = addRecords(store, newBookmarks.map(bookmarkToRecord));
+    await this.saveStore(store);
+    await this.regenerate(store, [...touched], false);
+  }
+
+  /** Rebuild the entire digest from a full bookmark set (the rebuild command). */
+  async rebuildAll(allBookmarks: Bookmark[]): Promise<void> {
+    if (!this.settings.ollamaModel) {
+      this.notify("请先在设置里选择一个 Ollama 模型。");
+      return;
+    }
+    const store: DigestStore = {};
+    addRecords(store, allBookmarks.map(bookmarkToRecord));
+    await this.saveStore(store);
+    await this.regenerate(store, Object.keys(store), true);
+  }
+
+  private async regenerate(store: DigestStore, months: string[], fromScratch: boolean): Promise<void> {
+    const order = months.filter((m) => (store[m]?.length ?? 0) > 0).sort((a, b) => b.localeCompare(a));
+    if (order.length === 0) return;
+
+    const sections: { month: string; content: string }[] = [];
+    let i = 0;
+    for (const month of order) {
+      i++;
+      this.notify(`AI 分析中…（${i}/${order.length}）${month}`);
+      const records = store[month];
+      try {
+        const body = await ollamaGenerate(
+          obsidianOllamaRequest,
+          this.settings.ollamaUrl,
+          this.settings.ollamaModel,
+          buildMonthPrompt(month, records)
+        );
+        sections.push({ month, content: renderMonthSection(month, records, body) });
+      } catch (e) {
+        console.warn(`[x-bookmarks] AI digest failed for ${month}:`, e);
+        this.notify(`AI 分析失败（${month}）：${e instanceof Error ? e.message : String(e)}`);
+        if (sections.length === 0) return; // nothing usable yet — bail
+        break; // keep what we have so far
+      }
+    }
+
+    const existing = fromScratch ? "" : await this.readDigest();
+    const merged = mergeDigest(existing, sections, {
+      title: DIGEST_TITLE,
+      model: this.settings.ollamaModel,
+      updatedAt: new Date().toISOString(),
+    });
+    await this.writeDigest(merged);
+    this.notify(`AI 摘要已更新（${sections.length} 个月份）。`);
+  }
+
+  // --- file/store io ---
+
+  private storePath(): string {
+    return normalizePath(`${this.manifestDir}/digest-store.json`);
+  }
+
+  private digestPath(): string {
+    const folder = this.settings.noteFolder;
+    const slash = folder.lastIndexOf("/");
+    const parent = slash === -1 ? "" : folder.slice(0, slash);
+    return normalizePath(parent ? `${parent}/${this.settings.digestFile}` : this.settings.digestFile);
+  }
+
+  private async loadStore(): Promise<DigestStore> {
+    const path = this.storePath();
+    try {
+      if (await this.app.vault.adapter.exists(path)) {
+        return JSON.parse(await this.app.vault.adapter.read(path)) as DigestStore;
+      }
+    } catch (e) {
+      console.warn("[x-bookmarks] failed to read digest store:", e);
+    }
+    return {};
+  }
+
+  private async saveStore(store: DigestStore): Promise<void> {
+    await this.app.vault.adapter.write(this.storePath(), JSON.stringify(store));
+  }
+
+  private async readDigest(): Promise<string> {
+    const f = this.app.vault.getAbstractFileByPath(this.digestPath());
+    return f instanceof TFile ? this.app.vault.read(f) : "";
+  }
+
+  private async writeDigest(content: string): Promise<void> {
+    const path = this.digestPath();
+    const f = this.app.vault.getAbstractFileByPath(path);
+    if (f instanceof TFile) await this.app.vault.modify(f, content);
+    else await this.app.vault.create(path, content);
+  }
+}

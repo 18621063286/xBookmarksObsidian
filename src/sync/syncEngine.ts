@@ -71,14 +71,15 @@ export interface SyncRunOptions {
 export class SyncEngine {
   constructor(private deps: SyncDeps) {}
 
-  async run(opts: SyncRunOptions = {}): Promise<void> {
+  /** Returns the bookmarks newly written this run (for the AI digest). */
+  async run(opts: SyncRunOptions = {}): Promise<Bookmark[]> {
     const { settings, notify } = this.deps;
     const creds: Credentials = { authToken: settings.authToken, ct0: settings.ct0 };
 
     const valid = validateCredentials(creds);
     if (!valid.valid) {
       notify(`${valid.reason} Log in to X or paste your cookie in settings.`);
-      return;
+      return [];
     }
 
     notify("Syncing X bookmarks…");
@@ -88,10 +89,30 @@ export class SyncEngine {
     try {
       const resolved = await resolveQueryId(queryDeps);
       const result = await this.fetchWith(resolved.queryId, creds, existing);
-      await this.writeAll(result, existing, opts);
+      return await this.writeAll(result, existing, opts);
     } catch (e) {
-      await this.handleError(e, creds, existing, opts);
+      return await this.handleError(e, creds, existing, opts);
     }
+  }
+
+  /** Fetch + parse the full bookmark set without writing notes (for digest rebuild). */
+  async fetchAllParsed(): Promise<Bookmark[]> {
+    const { settings, notify } = this.deps;
+    const creds: Credentials = { authToken: settings.authToken, ct0: settings.ct0 };
+    if (!validateCredentials(creds).valid) {
+      notify("Not logged in to X.");
+      return [];
+    }
+    const queryDeps = this.queryDeps();
+    const resolved = await resolveQueryId(queryDeps);
+    const fetchPage = makeFetchPage({ creds, queryId: resolved.queryId, bearer: settings.bearerOverride || undefined });
+    const result = await fetchAllBookmarks({
+      fetchPage,
+      maxPages: settings.maxPages,
+      startCursor: null,
+      seenIds: new Set(), // want everything
+    });
+    return parseBookmarks(result.results);
   }
 
   // --- pipeline steps ---
@@ -138,7 +159,7 @@ export class SyncEngine {
     result: FetchBookmarksResult,
     existing: Set<string>,
     opts: SyncRunOptions
-  ): Promise<void> {
+  ): Promise<Bookmark[]> {
     const { app, settings, notify } = this.deps;
     const bookmarks = parseBookmarks(result.results);
     const plan = planSync(existing, bookmarks, opts.force);
@@ -210,6 +231,8 @@ export class SyncEngine {
     if (settings.downloadMedia && written.length) {
       await this.localizeWritten(written, bookmarkedAt);
     }
+
+    return written.map((w) => w.bookmark);
   }
 
   /** Download attachments for already-written notes and rewrite their links to
@@ -256,7 +279,7 @@ export class SyncEngine {
     creds: Credentials,
     existing: Set<string>,
     opts: SyncRunOptions
-  ): Promise<void> {
+  ): Promise<Bookmark[]> {
     const { notify } = this.deps;
     // Always log the real error (with type + message) so the dev console shows
     // the precise failure, not just the user-facing Notice summary.
@@ -270,25 +293,22 @@ export class SyncEngine {
         this.deps.settings.lastSyncCursor = "";
         const refreshed = await forceRefreshQueryId(this.queryDeps());
         const result = await this.fetchWith(refreshed.queryId, creds, existing);
-        await this.writeAll(result, existing, opts);
+        return await this.writeAll(result, existing, opts);
       } catch (e2) {
         notify(`Sync failed after queryId refresh: ${msg(e2)} Set a manual queryId override in settings.`);
       }
-      return;
+      return [];
     }
     if (e instanceof AuthError) {
       notify(`${msg(e)}`);
-      return;
-    }
-    if (e instanceof RateLimitError) {
+    } else if (e instanceof RateLimitError) {
       notify(`${msg(e)} Your progress is saved — run sync again later.`);
-      return;
-    }
-    if (e instanceof FeaturesError) {
+    } else if (e instanceof FeaturesError) {
       notify(`${msg(e)} The request features may need updating.`);
-      return;
+    } else {
+      notify(`Sync failed: ${msg(e)}`);
     }
-    notify(`Sync failed: ${msg(e)}`);
+    return [];
   }
 
   // --- helpers ---

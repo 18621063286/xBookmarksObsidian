@@ -67,7 +67,18 @@ export class Setting {
     return this;
   }
   addButton(cb?: any) {
-    cb?.({ setButtonText: () => this, setDisabled: () => this, onClick: () => this });
+    const b: any = { setButtonText: () => b, setDisabled: () => b, setCta: () => b, onClick: () => b };
+    cb?.(b);
+    return this;
+  }
+  addDropdown(cb?: any) {
+    const dd: any = { addOption: () => dd, setValue: () => dd, onChange: () => dd };
+    cb?.(dd);
+    return this;
+  }
+  addExtraButton(cb?: any) {
+    const b: any = { setIcon: () => b, setTooltip: () => b, onClick: () => b };
+    cb?.(b);
     return this;
   }
   private textLike() {
