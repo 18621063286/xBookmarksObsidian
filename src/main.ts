@@ -5,7 +5,7 @@ import {
   XBookmarksSettingTab,
 } from "./settings";
 import { loginAndCaptureCookies } from "./auth/loginWindow";
-import { validateCredentials } from "./auth/cookies";
+import { SyncEngine } from "./sync/syncEngine";
 
 export default class XBookmarksPlugin extends Plugin {
   settings!: XBookmarksSettings;
@@ -80,7 +80,24 @@ export default class XBookmarksPlugin extends Plugin {
     }
   }
 
-  async runSync(_opts: { force?: boolean } = {}): Promise<void> {
-    new Notice("X bookmark sync is not wired up yet.");
+  async runSync(opts: { force?: boolean } = {}): Promise<void> {
+    if (this.syncing) {
+      new Notice("X bookmark sync already in progress…");
+      return;
+    }
+    this.syncing = true;
+    try {
+      const engine = new SyncEngine({
+        app: this.app,
+        settings: this.settings,
+        saveSettings: () => this.saveSettings(),
+        notify: (msg) => new Notice(msg),
+      });
+      await engine.run(opts);
+    } catch (e) {
+      new Notice(`X bookmark sync error: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      this.syncing = false;
+    }
   }
 }
