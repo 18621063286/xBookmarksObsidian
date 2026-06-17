@@ -116,7 +116,10 @@ export class XBookmarksSettingTab extends PluginSettingTab {
         btn
           .setButtonText(Platform.isDesktopApp ? "Log in to X" : "Login (desktop only)")
           .setDisabled(!Platform.isDesktopApp)
-          .onClick(() => this.plugin.runLogin())
+          .onClick(async () => {
+            await this.plugin.runLogin();
+            this.display(); // re-render so the Account status updates immediately
+          })
       );
 
     new Setting(containerEl)
