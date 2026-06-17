@@ -1,6 +1,6 @@
 // Minimal ambient types for the Electron bits this plugin touches on desktop.
-// Electron is provided by the Obsidian runtime (external at build time); these
-// declarations let us use a typed dynamic import instead of an untyped require.
+// Electron is provided by the Obsidian runtime and reached via window.require
+// (Electron's renderer require); these declarations keep that access typed.
 
 interface ElectronCookie {
   name: string;
@@ -26,12 +26,4 @@ interface ElectronBrowserWindowInstance {
 
 interface ElectronBrowserWindowCtor {
   new (options: Record<string, unknown>): ElectronBrowserWindowInstance;
-}
-
-declare module "electron" {
-  export const remote: { BrowserWindow: ElectronBrowserWindowCtor } | undefined;
-}
-
-declare module "@electron/remote" {
-  export const BrowserWindow: ElectronBrowserWindowCtor;
 }

@@ -3,25 +3,34 @@ import type { Credentials } from "./cookies";
 
 /**
  * Embedded X login via an Electron BrowserWindow (KTD1, mirrors weread's
- * wereadLoginModel). Desktop-only; Electron is loaded with a lazy dynamic
- * import inside the function so this module is import-safe on mobile and in tests.
+ * wereadLoginModel). Desktop-only; Electron is reached through `window.require`
+ * (Electron's renderer require), which is absent on mobile — so this module is
+ * import-safe everywhere. (A static `import()`/`require()` is wrong here: esbuild's
+ * CJS interop wraps the module under `.default`, so `.remote`/`.BrowserWindow`
+ * come back undefined and the window never opens.)
  */
 
 interface RemoteLike {
   BrowserWindow: ElectronBrowserWindowCtor;
 }
 
-async function getRemote(): Promise<RemoteLike | null> {
-  // Obsidian historically exposes electron's remote on the sandboxed module.
+function electronRequire(): ((mod: string) => unknown) | undefined {
+  return (window as unknown as { require?: (mod: string) => unknown }).require;
+}
+
+function getRemote(): RemoteLike | null {
+  const req = electronRequire();
+  if (!req) return null;
+  // Electron <14 exposed `remote` on the core module; newer builds use @electron/remote.
   try {
-    const electron = await import("electron");
+    const electron = req("electron") as { remote?: RemoteLike };
     if (electron.remote?.BrowserWindow) return electron.remote;
   } catch {
     /* ignore */
   }
   try {
-    const remote = await import("@electron/remote");
-    if (remote?.BrowserWindow) return { BrowserWindow: remote.BrowserWindow };
+    const remote = req("@electron/remote") as RemoteLike;
+    if (remote.BrowserWindow) return remote;
   } catch {
     /* ignore */
   }
@@ -45,7 +54,7 @@ export async function loginAndCaptureCookies(opts: LoginOptions = {}): Promise<C
     throw new Error("Embedded login is desktop-only. On mobile, paste your cookie manually in settings.");
   }
 
-  const remote = await getRemote();
+  const remote = getRemote();
   if (!remote?.BrowserWindow) {
     throw new Error(
       "Could not access Electron BrowserWindow (remote unavailable in this Obsidian build). " +
